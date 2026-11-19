@@ -37,9 +37,8 @@ class CaptureIntegrationTest(unittest.TestCase):
             events = queue.Queue()
             rec = Recorder(events)
             # Record subprocesses inherit PATH and LOCAL_FAKE_TS.
-            original_which = shutil.which
-            with patch.dict(os.environ, {'LOCAL_FAKE_TS': str(ts), 'PATH': str(root) + os.pathsep + os.environ.get('PATH','')}), \
-                 patch.object(liveclip_core.shutil, 'which', side_effect=lambda name: str(binary) if name=='streamlink' else original_which(name)):
+            with patch.dict(os.environ, {'LOCAL_FAKE_TS': str(ts)}), \
+                 patch.object(liveclip_core, 'streamlink_executable', return_value=str(binary)):
                 rec.start(CaptureConfig('https://example.com/authorized-live', 30, root / 'output', max_restarts=0))
                 assert rec.session_folder
                 pipeline = HighlightPipeline(rec.session_folder,

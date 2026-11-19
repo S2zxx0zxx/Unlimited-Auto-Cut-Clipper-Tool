@@ -51,6 +51,15 @@ def ffmpeg_executable() -> str:
     raise RuntimeError("FFmpeg is missing. Install FFmpeg (see README) and restart.")
 
 
+def streamlink_executable() -> str:
+    """Prefer the installed venv executable, then the system Streamlink CLI."""
+    script = Path(sys.executable).parent / ("streamlink.exe" if sys.platform == "win32" else "streamlink")
+    found = str(script) if script.is_file() else shutil.which("streamlink")
+    if not found:
+        raise RuntimeError("Streamlink is missing. Launch via START_WINDOWS.bat or start_mac_linux.sh.")
+    return found
+
+
 def command_for_segments(ffmpeg: str, seconds: int, first_number: int, folder: Path) -> list[str]:
     return [
         ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostdin",
@@ -146,11 +155,9 @@ class Recorder:
     def _run_once(self, config: CaptureConfig, ffmpeg_path: str):
         folder = self.session_folder
         assert folder is not None
-        # Streamlink may be installed into the same Python venv used by this app.
-        script = Path(sys.executable).parent / ("streamlink.exe" if sys.platform == "win32" else "streamlink")
-        streamlink_exec = str(script) if script.exists() else shutil.which("streamlink")
-        if not streamlink_exec:
-            raise RuntimeError("Streamlink is missing. Launch via START_WINDOWS.bat or start_mac_linux.sh.")
+        # Resolved via a function so synthetic tests can inject a fixture
+        # even when a real Streamlink executable exists in the CI runner.
+        streamlink_exec = streamlink_executable()
         upstream_args = [
             streamlink_exec, "--stdout", "--ffmpeg-ffmpeg", ffmpeg_path,
             "--retry-streams", "3", "--retry-max", "5",

@@ -5,6 +5,7 @@
 - Dependency doctor diagnostics and documentation reorganization.
 - IP-literal and control-character URL input hardening.
 - SQLite busy timeout, synthetic regression tests and Linux Actions workflow.
+- Inject a fake Streamlink executable in CI media tests independent of installed CLI.
 - Preserve v2.0 recording, multi-signal heuristics, OCR option, review, reports and restart recovery.
 
 ## 2.0.0 — 2026-11-19
