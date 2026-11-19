@@ -1,0 +1,28 @@
+# Python build products
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+# local media and analysis state: never commit user's recordings
+Live_*/
+clip_*.mp4
+highlight_*.mp4
+*.partial.mp4
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+highlights/
+highlights.jsonl
+highlights_review.csv
+*.marker
+*.log
+# local preferences
+.liveclip_zero_smart_settings.json
+.DS_Store

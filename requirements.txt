@@ -1,0 +1,2 @@
+# For users who prefer requirements.txt to editable pyproject installs.
+streamlink>=8.0,<9.0
