@@ -53,6 +53,16 @@ class StudioArguments(unittest.TestCase):
         self.assertIn("testsrc2=size=320x180:rate=12:duration=36", cmd)
         self.assertTrue(cmd[-1].endswith(".mp4"))
 
+    def test_live_capture_buttons_are_inside_live_tab_and_above_shared_detection(self):
+        # Tkinter cannot create a window in headless Linux CI.
+        # Guard against returning Start below the shared oversized Notebook.
+        gui = (Path(__file__).resolve().parents[1] / "src" / "liveclip" / "gui.py").read_text(encoding="utf-8")
+        self.assertIn("live_actions = ttk.Frame(live_tab)", gui)
+        self.assertNotIn("actions = ttk.Frame(outer)", gui)
+        self.assertLess(gui.index("self.start_btn = ttk.Button(live_actions"),
+                        gui.index("detection = ttk.LabelFrame(outer"))
+        self.assertIn("self.stop_btn = ttk.Button(live_actions", gui)
+
     def test_launcher_and_notices_preserved(self):
         root = Path(__file__).resolve().parents[1]
         win = (root / "START_WINDOWS.bat").read_text()
