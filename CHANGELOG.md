@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0 — 2026-11-20
+- Make LiveClip Zero Studio the primary first-party desktop product identity; preserve repository source/license attribution.
+- Add a Local Shorts Studio tab, existing-video highlight export, and fully local synthetic demo generation.
+- Enable optional offline VOD analysis through the one-click desktop launchers; provide a Windows environment check.
+- Add a stable `liveclip-studio` CLI entry point; keep existing commands as backward-compatible aliases.
+- Rework onboarding and troubleshooting around real user workflows, installation prerequisites and transparent verification limits.
+- Keep third-party copyright/permission notices intact; no Git history rewrite or false authorship claims.
+
+
 ## 2.3.0 — 2026-11-20
 - Audit all 57 tracked files in GTA Auto Clipper pinned at a9ac2ba8; record canonical de-dup decisions and outstanding third-party dependencies.
 - Add optional GTA third-person player-centred vertical cropping and validated smoothed temporal keyframe pan to existing Neon vertical FFmpeg renderer.
