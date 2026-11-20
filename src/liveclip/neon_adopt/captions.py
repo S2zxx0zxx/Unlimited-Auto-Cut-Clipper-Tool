@@ -5,7 +5,7 @@
 """Independent word-timed ASR, editable transcript and styled ASS/SRT."""
 from pathlib import Path
 from .translit import to_hinglish
-import json,os,threading,subprocess
+import json,os,threading,subprocess,hashlib
 MODELS={}
 ROMAN_PROMPT='Aaj hum GTA 6 ke baare mein baat karenge, yeh bahut mast hai. Kya haal hai bhai, chalo shuru karte hain. Matlab ekdum sahi hai, nahi yaar, bilkul.'
 DEVA_PROMPT='यह हिंदी और अंग्रेज़ी में गेमिंग वीडियो है। GTA, गेमप्ले, क्लिपिंग, वीडियो, टूल।'
@@ -91,7 +91,10 @@ def transcribe(source,start,end,data,report=lambda message:None,language=None,mo
     if not spec:
         spec=_turbo_spec()
     model_tag=Path(spec).name[:14]
-    key=f'{source.stem}-{start:.2f}-{end:.2f}-{language or "auto"}-{model_tag}-v3'
+    source=Path(source).expanduser().resolve()
+    stat=source.stat()
+    fingerprint=hashlib.sha256(f'{source}:{stat.st_size}:{stat.st_mtime_ns}'.encode()).hexdigest()[:14]
+    key=f'{source.stem[:32]}-{fingerprint}-{start:.2f}-{end:.2f}-{language or "auto"}-{model_tag}-v3'
     cached=data/(key+'.words.json')
     if cached.exists():return json.loads(cached.read_text(encoding='utf-8'))
     with LOCK:
