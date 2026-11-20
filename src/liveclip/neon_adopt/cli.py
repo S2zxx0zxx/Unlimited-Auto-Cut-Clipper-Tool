@@ -244,6 +244,8 @@ def _argparser() -> argparse.ArgumentParser:
     vod.add_argument("folder", type=Path)
     vod.add_argument("--count", type=int, default=3)
     vod.add_argument("--seconds", type=int, default=30)
+    vod.add_argument("--precision", action="store_true",
+                     help="Only export corroborated activity intervals; no forced filler clips")
     vod.add_argument("--profile", choices=list(curation.PROFILES), default="balanced")
     vod.add_argument("--layout", choices=[x[0] for x in layouts.CATALOG], default="blur")
     vod.add_argument("--cam-box")
@@ -272,6 +274,8 @@ def _argparser() -> argparse.ArgumentParser:
     vod_url.add_argument("--i-have-rights", action="store_true", help="Confirm ownership or recording permission")
     vod_url.add_argument("--count", type=int, default=3)
     vod_url.add_argument("--seconds", type=int, default=30)
+    vod_url.add_argument("--precision", action="store_true",
+                         help="Require multi-signal event evidence")
     vod_url.add_argument("--profile", choices=list(curation.PROFILES), default="balanced")
     vod_url.add_argument("--max-gib", type=float, default=5.0)
     vod_url.add_argument("--no-motion", action="store_true")
@@ -323,6 +327,8 @@ def main(argv=None) -> int:
                      "--seconds", str(args.seconds), "--profile", args.profile]
             if args.no_motion:
                 child.append("--no-motion")
+            if args.precision:
+                child.append("--precision")
             return main(child)
         if args.command == "vertical":
             result = verticalize(args.source, args.output, start=args.start, duration=args.duration,
@@ -338,8 +344,8 @@ def main(argv=None) -> int:
                                  censor_captions=args.censor_captions,
                                  credit=args.credit)
         elif args.command == "vod":
-            if not 1 <= args.count <= 12 or not 10 <= args.seconds <= 180:
-                raise ValueError("VOD supports 1–12 clips of 10–180 seconds each.")
+            if not 1 <= args.count <= 12 or not 10 <= args.seconds <= 300:
+                raise ValueError("VOD supports 1–12 clips of 10–300 seconds each.")
             if args.pop_captions and not args.words_json:
                 raise ValueError("--pop-captions requires --words-json.")
             if args.pop_captions and args.burn_captions:
@@ -353,6 +359,8 @@ def main(argv=None) -> int:
                 from .highlights import rank
             except ImportError as error:
                 raise RuntimeError("Install optional VOD dependencies: pip install -e '.[neon]'") from error
+            if args.precision and args.smart:
+                raise ValueError("Precision moment boundaries currently require local observable signals; choose --precision without --smart.")
             if args.smart:
                 if args.words_json is None:
                     raise ValueError("--smart requires --words-json (transcribe first or import an authorized transcript).")
@@ -366,11 +374,13 @@ def main(argv=None) -> int:
                                       profile=args.profile)
             else:
                 candidates = rank(str(args.source), info["duration"], count=min(30, args.count * 4),
-                                  length=args.seconds, motion_on=not args.no_motion)
+                                  length=args.seconds, motion_on=not args.no_motion,
+                                  precision=args.precision)
                 for candidate in candidates:
                     candidate["rank"] = float(candidate.get("score", 0)) / 100
                 chosen = curation.select(candidates, args.count, args.profile)
-                engine = "activity heuristics only"
+                engine = ("conservative multi-signal event windows (review required)"
+                          if args.precision else "activity heuristics only")
             folder = args.folder.expanduser().resolve()
             folder.mkdir(parents=True, exist_ok=True)
             outputs = []
@@ -386,7 +396,9 @@ def main(argv=None) -> int:
                                    pop_language=args.pop_language)
                 outputs.append({**candidate, "asset": clip})
             result = {"source": str(args.source), "mode": engine,
-                      "outputs": outputs, "notice": "Candidate ranking, not a calibrated virality probability"}
+                      "outputs": outputs, "notice": ("No reliable moment detected; no clip fabricated."
+                        if args.precision and not chosen else
+                        "Candidate ranking, not a calibrated virality probability")}
             _atomic_json(folder / "candidates.json", result)
         elif args.command == "transcribe":
             info = _media_info(args.source)
