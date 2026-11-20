@@ -208,6 +208,16 @@ def _argparser() -> argparse.ArgumentParser:
     vod.add_argument("--burn-captions", action="store_true")
     vod.add_argument("--resolution", type=int, choices=[720, 1080], default=720)
     vod.add_argument("--no-motion", action="store_true")
+    vod.add_argument("--smart", action="store_true", help="Optional transcript-aware scoring with local Ollama")
+    vod.add_argument("--words-json", type=Path, help="Full source word transcript from the transcribe command")
+
+    asr = sub.add_parser("transcribe", help="Transcribe local source to word JSON and SRT (optional local speech model)")
+    asr.add_argument("source", type=Path)
+    asr.add_argument("output_base", type=Path, help="Output stem, e.g. transcript/my_video")
+    asr.add_argument("--start", type=float, default=0)
+    asr.add_argument("--seconds", type=float)
+    asr.add_argument("--language", choices=["en", "hi", "hinglish"])
+    asr.add_argument("--model", default="small", help="Explicit faster-whisper model name or local path")
 
     captions = sub.add_parser("captions-convert", help="Validate SRT/VTT and rewrite as SRT/VTT")
     captions.add_argument("source", type=Path)
@@ -254,11 +264,24 @@ def main(argv=None) -> int:
                 from .highlights import rank
             except ImportError as error:
                 raise RuntimeError("Install optional VOD dependencies: pip install -e '.[neon]'") from error
-            candidates = rank(str(args.source), info["duration"], count=min(30, args.count * 4),
-                              length=args.seconds, motion_on=not args.no_motion)
-            for candidate in candidates:
-                candidate["rank"] = float(candidate.get("score", 0)) / 100
-            chosen = curation.select(candidates, args.count, args.profile)
+            if args.smart:
+                if args.words_json is None:
+                    raise ValueError("--smart requires --words-json (transcribe first or import an authorized transcript).")
+                words_data = _read_json(args.words_json)
+                words = words_data.get("words") if isinstance(words_data, dict) else words_data
+                if not isinstance(words, list) or not words or len(words) > 150_000:
+                    raise ValueError("Transcript must be a nonempty word list (max 150,000).")
+                from .smart import find
+                chosen, engine = find(str(args.source), info["duration"], args.count, args.seconds,
+                                      lambda *ignored: None, words=words, motion=not args.no_motion,
+                                      profile=args.profile)
+            else:
+                candidates = rank(str(args.source), info["duration"], count=min(30, args.count * 4),
+                                  length=args.seconds, motion_on=not args.no_motion)
+                for candidate in candidates:
+                    candidate["rank"] = float(candidate.get("score", 0)) / 100
+                chosen = curation.select(candidates, args.count, args.profile)
+                engine = "activity heuristics only"
             folder = args.folder.expanduser().resolve()
             folder.mkdir(parents=True, exist_ok=True)
             outputs = []
@@ -270,9 +293,37 @@ def main(argv=None) -> int:
                                    captions_file=args.captions_file, burn_captions=args.burn_captions,
                                    resolution=args.resolution)
                 outputs.append({**candidate, "asset": clip})
-            result = {"source": str(args.source), "mode": "heuristic, not a semantic AI classifier",
-                      "outputs": outputs}
+            result = {"source": str(args.source), "mode": engine,
+                      "outputs": outputs, "notice": "Candidate ranking, not a calibrated virality probability"}
             _atomic_json(folder / "candidates.json", result)
+        elif args.command == "transcribe":
+            info = _media_info(args.source)
+            length = min(args.seconds if args.seconds is not None else 180, info["duration"] - args.start)
+            if not 0 <= args.start < info["duration"] or not 0 < length <= MAX_SINGLE_CLIP_SECONDS:
+                raise ValueError("Transcription selection must be within the video and at most 600s.")
+            try:
+                from .captions import transcribe
+                base = args.output_base.expanduser().resolve()
+                base.parent.mkdir(parents=True, exist_ok=True)
+                cache = base.parent / ".asr_cache"
+                cache.mkdir(exist_ok=True)
+                word_data = transcribe(args.source.expanduser().resolve(), args.start,
+                                       args.start + length, cache,
+                                       language=args.language, model=args.model)
+            except ImportError as exc:
+                raise RuntimeError("Install optional local transcription dependencies: pip install -e '.[speech]'") from exc
+            words = word_data.get("words") or []
+            if not words:
+                raise ValueError("No words detected; check source/language or use a subtitle import.")
+            out_json = base.with_suffix(".words.json")
+            out_srt = base.with_suffix(".srt")
+            _atomic_json(out_json, word_data)
+            items = [{"start": max(0, float(w["start"])),
+                      "end": float(w["end"]), "text": str(w["text"])} for w in words]
+            out_srt.write_text(subtitles.write_track(items, "srt", duration=length + .1,
+                                                       allow_overlap=True), encoding="utf-8")
+            result = {"words": len(words), "language": word_data.get("language"),
+                      "transcript_json": str(out_json), "subtitles": str(out_srt)}
         elif args.command == "captions-convert":
             source = args.source.read_text(encoding="utf-8-sig")
             if len(source) > 4_000_000:
@@ -312,7 +363,7 @@ def main(argv=None) -> int:
             raise ValueError("Unsupported action")
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
-    except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+    except (ValueError, RuntimeError, OSError, ImportError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
         print(f"LiveClip Neon: {exc}", file=sys.stderr)
         return 2
 
