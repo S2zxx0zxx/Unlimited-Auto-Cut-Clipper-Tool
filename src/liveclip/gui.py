@@ -115,6 +115,18 @@ class App:
         output_row.pack(fill='x', pady=(5, 8))
         ttk.Entry(output_row, textvariable=self.output).pack(side='left', fill='x', expand=True)
         ttk.Button(output_row, text='Browse', command=self.browse).pack(side='left', padx=(8, 0))
+        # Keep critical capture actions INSIDE the Live tab above the fold.
+        # A taller Studio tab can make the shared Notebook overgrow small screens;
+        # never place the only Start/Stop controls below that Notebook.
+        live_actions = ttk.Frame(live_tab)
+        live_actions.pack(fill='x', pady=(5, 8))
+        self.start_btn = ttk.Button(live_actions, text='▶ START LIVE + SMART', command=self.start)
+        self.start_btn.pack(side='left')
+        self.stop_btn = ttk.Button(live_actions, text='■ STOP + FINISH', command=self.stop, state='disabled')
+        self.stop_btn.pack(side='left', padx=(8, 0))
+        ttk.Button(live_actions, text='Open output folder', command=self.open_folder).pack(side='left', padx=(8, 0))
+        ttk.Label(live_tab, text='Paste an authorized LIVE URL, then press START. The source must actually be live.',
+                  style='Hint.TLabel').pack(anchor='w', pady=(0, 6))
 
         ttk.Label(replay_tab, text='Already recorded? Analyze any folder containing clip_000001.mp4, clip_000002.mp4, etc.').pack(anchor='w', pady=(4, 9))
         ttk.Label(replay_tab, text='Re-running the same folder resumes safely: it does not re-score segments already indexed.',
@@ -158,13 +170,6 @@ class App:
         ttk.Label(detection, text='Scores indicate promising activity, not proven viral / funny / winning moments.',
                   style='Hint.TLabel').pack(anchor='w', pady=(6, 0))
 
-        actions = ttk.Frame(outer)
-        actions.pack(fill='x', pady=(0, 12))
-        self.start_btn = ttk.Button(actions, text='▶ START LIVE + SMART', command=self.start)
-        self.start_btn.pack(side='left')
-        self.stop_btn = ttk.Button(actions, text='■ STOP + FINISH', command=self.stop, state='disabled')
-        self.stop_btn.pack(side='left', padx=8)
-        ttk.Button(actions, text='Open output folder', command=self.open_folder).pack(side='left', padx=8)
         ttk.Label(outer, textvariable=self.status).pack(anchor='w', pady=(0, 5))
         ttk.Label(outer, textvariable=self.smart_status, style='Hint.TLabel').pack(anchor='w', pady=(0, 4))
         ttk.Label(outer, textvariable=self.counter, style='Hint.TLabel').pack(anchor='w', pady=(0, 9))
