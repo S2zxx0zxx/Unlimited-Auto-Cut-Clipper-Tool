@@ -51,7 +51,7 @@ def _chunk(source, start, length, report):
     return f, c
 
 def _motion(source, duration, report):
-    workers = max(2, min(12, (os.cpu_count() or 4) - 2))
+    workers = max(1, min(4, (os.cpu_count() or 4) // 2))
     size = max(60, int(np.ceil(duration / workers / 60) * 60))          # whole-minute chunks
     starts = list(range(0, int(np.ceil(duration)), size))
     done = [0.]
@@ -64,16 +64,30 @@ def _motion(source, duration, report):
     return f, c
 
 def _audio(source):
-    cmd = ['ffmpeg', '-v', 'error', '-i', str(source), '-vn', '-ac', '1', '-ar', '8000', '-f', 's16le', 'pipe:1']
-    raw = subprocess.run(cmd, capture_output=True).stdout
-    x = np.frombuffer(raw[:len(raw) // 2 * 2], np.int16).astype(np.float32) / 32768
-    n = len(x) // 8000
-    if n == 0: return np.zeros(0), np.zeros(0)
-    x = x[:n * 8000].reshape(n, 8000)
-    rms = np.sqrt((x ** 2).mean(1))
-    spec = np.abs(np.fft.rfft(x * np.hanning(8000), axis=1)) ** 2          # 1 Hz bins
-    hf = spec[:, 2000:4000].sum(1) / (spec.sum(1) + 1e-9)
-    return rms, hf
+    """Stream 8kHz mono samples per second (bounded RAM, unlike full-file reads)."""
+    cmd = ['ffmpeg', '-v', 'error', '-i', str(source), '-vn', '-ac', '1',
+           '-ar', '8000', '-f', 's16le', 'pipe:1']
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                            bufsize=8000 * 8)
+    rms, high = [], []
+    window = np.hanning(8000).astype(np.float32)
+    try:
+        while True:
+            raw = proc.stdout.read(16000)
+            if len(raw) < 16000:
+                break
+            x = np.frombuffer(raw, np.int16).astype(np.float32) / 32768.0
+            rms.append(float(np.sqrt(np.mean(x ** 2))))
+            spec = np.abs(np.fft.rfft(x * window)) ** 2
+            high.append(float(spec[2000:4000].sum() / (spec.sum() + 1e-9)))
+        proc.wait()
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        proc.stdout.close()
+    return np.asarray(rms, dtype=np.float32), np.asarray(high, dtype=np.float32)
+
 
 def _z(x, n, win=120):
     """Local z-score vs a rolling baseline, clipped to 0..1 (z of 3.5 = 1)."""
