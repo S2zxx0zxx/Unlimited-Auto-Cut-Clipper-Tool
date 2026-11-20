@@ -26,10 +26,13 @@ if not exist ".venv\Scripts\python.exe" (
 ".venv\Scripts\python.exe" -c "import sys; assert sys.version_info >= (3,10), 'Python 3.10+ required'"
 if errorlevel 1 goto missing_python
 
-echo [3/4] Installing local media-analysis engine...
-echo First launch may need internet to install free Python packages.
-".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -e ".[neon]"
-if errorlevel 1 goto install_failed
+echo [3/4] Checking free local media-analysis packages...
+".venv\Scripts\python.exe" -c "import liveclip,numpy,cv2,streamlink; assert liveclip.__version__=='2.4.0'" >nul 2>nul
+if errorlevel 1 (
+    echo Installing missing packages; first run may need internet.
+    ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -e ".[neon]"
+    if errorlevel 1 goto install_failed
+)
 
 echo [4/4] Opening LiveClip Zero Studio...
 ".venv\Scripts\python.exe" -m liveclip.gui
