@@ -9,9 +9,10 @@ import subprocess
 import tempfile
 from threading import Thread
 import unittest
+from unittest.mock import patch
 
 from liveclip.moments import LENGTH_OPTIONS, candidate_window, propose_moments
-from liveclip.pipeline import SmartConfig, SessionDB, render_highlight, rebuild_manifest
+from liveclip.pipeline import SmartConfig, SessionDB, HighlightPipeline, render_highlight, rebuild_manifest
 from liveclip.studio import make_vod_args
 from liveclip.web_studio import HOST, make_server
 
@@ -92,6 +93,35 @@ class PrecisionMoments(unittest.TestCase):
                 info = json.loads((root / "highlights.jsonl").read_text().splitlines()[0])
                 self.assertEqual(info["window_start"],20)
                 self.assertEqual(info["window_end"],150)
+            finally:
+                db.close()
+
+    def test_live_visual_racing_sequence_exported_once_without_audio(self):
+        from liveclip.signals import Peak
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = SessionDB(root)
+            try:
+                for k in range(5):
+                    db.add_segment(k+1, root / f"clip_{k+1:06d}.mp4",
+                                   0, k*60.,60.)
+                for k,t in enumerate((25.,55.,85.,115.),1):
+                    peak = Peak(t, 64., ["rapid_motion"],
+                                {"motion":.85,"audio_surge":0,"audio_onset":0,
+                                 "scene":.1,"flash":0},[])
+                    self.assertEqual(db.insert_candidate(0,k,t,peak,10),"new")
+                pipeline=HighlightPipeline(root,SmartConfig(threshold=22,
+                                              highlight_seconds=300,precision=True))
+                pipeline._finish.set()
+                mocked_file = root / "highlights" / "test.mp4"
+                with patch("liveclip.pipeline.render_highlight",
+                           return_value=(mocked_file,110.)) as render:
+                    pipeline._export_ready(db)
+                self.assertEqual(db.stats()["exported"],1)
+                self.assertEqual(render.call_count,1)
+                suppressed = db.connection.execute(
+                    "SELECT COUNT(*) FROM candidates WHERE status='rejected_overlap'").fetchone()[0]
+                self.assertGreaterEqual(suppressed,2)
             finally:
                 db.close()
 
