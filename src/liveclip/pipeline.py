@@ -19,6 +19,7 @@ import time
 from typing import Callable
 
 from .signals import analyze_segment, probe_video
+from .moments import LENGTH_OPTIONS, candidate_window
 
 SEGMENT_RE = re.compile(r'^clip_(\d{6})\.mp4$')
 
@@ -35,6 +36,7 @@ class SmartConfig:
     cooldown_seconds: int = 25
     ocr: bool = False
     poll_seconds: float = 1.0
+    precision: bool = False  # Opt-in from desktop/web; preserves existing CLI/test sessions
 
     def validate(self):
         from .signals import PROFILES
@@ -42,8 +44,8 @@ class SmartConfig:
             raise ValueError('Invalid smart profile')
         if not 0 <= self.threshold <= 100:
             raise ValueError('Threshold must be 0 to 100')
-        if self.highlight_seconds not in (15, 30, 45, 60):
-            raise ValueError('Highlight length must be 15, 30, 45 or 60')
+        if self.highlight_seconds not in LENGTH_OPTIONS:
+            raise ValueError('Highlight length must be 15–300 seconds')
         if not 0 <= self.cooldown_seconds <= 240:
             raise ValueError('Cooldown must be between 0 and 240 seconds')
         if not .2 <= self.poll_seconds <= 15:
@@ -160,16 +162,20 @@ def _concat_quote(path: Path) -> str:
 
 
 def render_highlight(folder: Path, row: sqlite3.Row, segments: list[sqlite3.Row],
-                     config: SmartConfig) -> tuple[Path, float]:
+                     config: SmartConfig, window: tuple[float, float] | None = None) -> tuple[Path, float]:
     same_epoch = [s for s in segments if s['epoch'] == row['epoch']]
     if not same_epoch:
         raise ValueError('Candidate epoch not found')
     timeline_start = same_epoch[0]['timeline_start']
     timeline_end = same_epoch[-1]['timeline_start'] + same_epoch[-1]['duration']
-    preroll = config.highlight_seconds * .40
-    wanted_start = max(timeline_start, row['peak_time'] - preroll)
-    wanted_end = min(timeline_end, wanted_start + config.highlight_seconds)
-    wanted_start = max(timeline_start, wanted_end - config.highlight_seconds)
+    if window is not None:
+        wanted_start = max(timeline_start, window[0])
+        wanted_end = min(timeline_end, window[1])
+    else:
+        preroll = config.highlight_seconds * .40
+        wanted_start = max(timeline_start, row['peak_time'] - preroll)
+        wanted_end = min(timeline_end, wanted_start + config.highlight_seconds)
+        wanted_start = max(timeline_start, wanted_end - config.highlight_seconds)
     # No clips across unexpected gaps/reconnect boundaries.
     selected = [s for s in same_epoch
                 if s['timeline_start'] + s['duration'] > wanted_start + 1e-3
@@ -334,10 +340,40 @@ class HighlightPipeline:
             if not current_epoch:
                 continue
             end = current_epoch[-1]['timeline_start'] + current_epoch[-1]['duration']
-            required_end = row['peak_time'] + self.config.highlight_seconds * .60
+            required_end = row['peak_time'] + min(self.config.highlight_seconds * .60, 180)
             # Wait for post-roll, unless recording has stopped / folder is complete.
             if not self._finish.is_set() and end < required_end:
                 continue
+            window = None
+            if self.config.precision:
+                # A peak alone never proves a race/match event. Conservative
+                # mode rejects weak or single-source random scene flashes.
+                reasons = set(json.loads(row['reasons_json']))
+                signals = json.loads(row['signals_json'])
+                audio = signals.get('audio_surge', 0) >= .35 or signals.get('audio_onset', 0) >= .35
+                video = signals.get('motion', 0) >= .35 or signals.get('scene', 0) >= .45
+                text = bool(json.loads(row['ocr_json']))
+                if not ((audio and video) or (text and (audio or video))):
+                    db.mark(row['id'], 'rejected_weak', error='No independent evidence corroboration')
+                    self.emit('smart_status', f"Skipped weak event #{row['id']}; no arbitrary highlight generated")
+                    continue
+                neighbours = [r['peak_time'] for r in db.connection.execute(
+                    """SELECT peak_time FROM candidates
+                       WHERE epoch=? AND peak_time BETWEEN ? AND ? AND score>=?
+                       AND status IN ('pending','exported','rendering')""",
+                    (row['epoch'], max(current_epoch[0]['timeline_start'],
+                                      row['peak_time'] - self.config.highlight_seconds * .62),
+                     end, max(self.config.threshold, 25)))]
+                window = candidate_window(
+                    row['peak_time'], neighbours, limit=self.config.highlight_seconds,
+                    epoch_start=current_epoch[0]['timeline_start'], epoch_end=end)
+                if window is None:
+                    if self._finish.is_set():
+                        db.mark(row['id'], 'rejected_weak',
+                                error='Insufficient sustained evidence for requested clip length')
+                    continue
+                if not self._finish.is_set() and end < window[1] + 2:
+                    continue
             # The source recorder independently enforces a low-space guard;
             # exports must not bypass it.
             if shutil.disk_usage(self.folder).free < 512 * 1024 * 1024:
@@ -345,7 +381,8 @@ class HighlightPipeline:
                 return
             db.mark(row['id'], 'rendering')
             try:
-                result, actual_seconds = render_highlight(self.folder, row, segments, self.config)
+                result, actual_seconds = render_highlight(self.folder, row, segments, self.config,
+                                                           window=window)
                 db.mark(row['id'], 'exported', str(result.relative_to(self.folder)))
                 # SQLite is authoritative, and reports are deterministically
                 # reconciled periodically, at stop, and on resume/review.
