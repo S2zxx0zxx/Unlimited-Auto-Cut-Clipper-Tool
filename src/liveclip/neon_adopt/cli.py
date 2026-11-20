@@ -93,6 +93,7 @@ def verticalize(
     overwrite: bool = False,
     gta_player_anchor: float | None = None,
     pan_keys_file: Path | None = None,
+    track_model_file: Path | None = None,
     pop_words_file: Path | None = None,
     pop_language: str = "en",
     censor_captions: bool = False,
@@ -125,12 +126,21 @@ def verticalize(
     rects = [_box(cam_box, info["width"], info["height"], "Camera"),
              _box(game_box, info["width"], info["height"], "Gameplay")]
     graph = layouts.render_graph(layout, rects, face_size, width, height)
-    if gta_player_anchor is not None or pan_keys_file is not None:
+    if gta_player_anchor is not None or pan_keys_file is not None or track_model_file is not None:
         from liveclip.gta_adopt.framing import bounded, fill_filter, read_pan_keys
         if layout != "fill" or aspect != "vertical" or cam_box or game_box:
             raise ValueError("GTA pan mode requires --layout fill --aspect vertical and no manual boxes")
+        if pan_keys_file is not None and track_model_file is not None:
+            raise ValueError("Choose only one of --pan-keys-json and --track-player-model")
         anchor = bounded(gta_player_anchor if gta_player_anchor is not None else .38)
         keys = read_pan_keys(pan_keys_file, duration) if pan_keys_file else None
+        if track_model_file is not None:
+            try:
+                from liveclip.gta_adopt.player_detector import track_player
+                keys = track_player(source, float(start), float(duration),
+                                    track_model_file.expanduser().resolve())
+            except ImportError as exc:
+                raise RuntimeError("Install the optional tracker: pip install -e '.[gta]'") from exc
         graph = fill_filter(width, height, anchor=anchor, keys=keys)
     srt = _captions_for_clip(captions_file, start, start + duration) if captions_file else ""
     if pop_words_file is not None and burn_captions:
@@ -178,7 +188,9 @@ def verticalize(
                 "captions_sidecar": str(sidecar) if srt else None,
                 "captions_burned": bool((burn_captions and srt) or pop_words_file is not None),
                 "caption_engine": "gta-popup" if pop_words_file is not None else ("srt" if burn_captions else "none"),
-                "gta_pan_mode": bool(gta_player_anchor is not None or pan_keys_file is not None),
+                "gta_pan_mode": bool(gta_player_anchor is not None or pan_keys_file is not None or track_model_file is not None),
+                "player_model_requested": track_model_file is not None,
+                "player_tracking_applied": bool(keys) if (gta_player_anchor is not None or pan_keys_file is not None or track_model_file is not None) else False,
                 "source_preserved": True}
     finally:
         temp_output.unlink(missing_ok=True)
@@ -221,6 +233,7 @@ def _argparser() -> argparse.ArgumentParser:
     vertical.add_argument("--overwrite", action="store_true")
     vertical.add_argument("--gta-player-anchor", type=float, help="Opt-in third-person anchor, normally 0.38; requires fill vertical")
     vertical.add_argument("--pan-keys-json", type=Path, help="Opt-in normalized player motion keyframes, source-relative to clip")
+    vertical.add_argument("--track-player-model", type=Path, help="Opt-in local YOLOX ONNX model file; no auto-download")
     vertical.add_argument("--pop-words-json", type=Path, help="Absolute word-timed source transcript, adds yellow pop captions")
     vertical.add_argument("--pop-language", choices=["en", "hinglish"], default="en")
     vertical.add_argument("--censor-captions", action="store_true", help="Optional mask sensitive words in text only")
@@ -307,6 +320,7 @@ def main(argv=None) -> int:
                                  fps=args.fps, overwrite=args.overwrite,
                                  gta_player_anchor=args.gta_player_anchor,
                                  pan_keys_file=args.pan_keys_json,
+                                 track_model_file=args.track_player_model,
                                  pop_words_file=args.pop_words_json,
                                  pop_language=args.pop_language,
                                  censor_captions=args.censor_captions,
