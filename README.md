@@ -76,6 +76,36 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 
 Tests generate **synthetic locally-created media**; FFmpeg and ffprobe are needed for the video integration suite. GitHub Actions configuration is provided, but a passing remote run must be checked separately. See [Architecture](docs/ARCHITECTURE.md), [Security](docs/SECURITY.md), [Development](docs/DEVELOPMENT.md) and [Test evidence](docs/TEST_RESULTS.md).
 
+## GTA Auto Clipper — unique third-repository backend enhancements (v2.3)
+
+The pinned MIT source is [AnIntellectualBeing/GTA-Auto-Clipper](https://github.com/AnIntellectualBeing/GTA-Auto-Clipper) at a9ac2ba8. [The 57-file audit and deduplication decisions](docs/GTA_AUTO_CLIPPER_AUDIT.md) explain what is new, existing, intentionally excluded, or still pending. The [MIT license and author notice](THIRD_PARTY_LICENSES/GTA-Auto-Clipper-MIT.txt) are preserved. No new GUI or recorder replaces LiveClip/Neon.
+
+New opt-in features extend the **same** liveclip-neon commands:
+
+    # Player-centred GTA framing (no trained player recognizer required)
+    liveclip-neon vertical owned.mp4 gta-short.mp4 --layout fill --gta-player-anchor 0.38 --start 10 --duration 30
+
+    # Use pre-reviewed clip-relative [seconds, x_fraction] points for a smooth pan
+    liveclip-neon vertical owned.mp4 tracked.mp4 --layout fill --pan-keys-json keyframes.json --duration 30
+
+    # Optional local YOLOX-S person tracker (no model weights auto-downloaded)
+    pip install -e '.[gta]'
+    liveclip-neon vertical owned.mp4 onnx-short.mp4 --layout fill --track-player-model /trusted/yolox-model.onnx
+
+    # Existing absolute-time Whisper words -> one-line word-by-word yellow pop subtitles
+    liveclip-neon vertical owned.mp4 captions.mp4 --layout fill --pop-words-json transcript.words.json --pop-language en
+
+    # Apply GTA crop and pop captions to clips selected from a local VOD
+    liveclip-neon vod owned.mp4 highlights --layout fill --gta-player-anchor 0.38 --words-json transcript.words.json --pop-captions
+
+    # Distinct-chatter/reaction scoring from pre-aligned chat timestamps (offline)
+    liveclip-neon chat-reactions messages.json --window 30 --step 10
+
+    # Read-only live discovery; requires YOUR YouTube Data API key
+    liveclip-neon discover-live "GTA 6 gameplay" --max 10
+
+Notes: a tracking model file and its weights license must be verified separately. Chat times must be relative to the matching source and reconnection epoch, not arbitrary wall-clock timestamps. YouTube discovery never implies gameplay is visually confirmed or recording/posting is permitted. These are heuristics and optional styling options; not semantic game-event recognition. Every original source clip is preserved.
+
 ## Future capability roadmap (research and planning only)
 
 The next-phase build is tracked in the [Advanced Capabilities Master Plan](docs/ADVANCED_CAPABILITIES_MASTER_PLAN.md), the [120-task Execution Ledger](docs/ADVANCED_EXECUTION_LEDGER.md), and the [Research & Architecture Decision Register](docs/ADVANCED_RESEARCH_DECISIONS.md). These are **planned features, not currently shipped**: real-provider reliability, semantic/game-specific event recognition, subject-aware vertical reframing, subtitles/translation, calibrated ranking, multi-stream control, official platform publishing, desktop installers, Chrome/Android clients, 24-hour resilience and release/security certification. Each requires verified acceptance evidence before being marked complete.
