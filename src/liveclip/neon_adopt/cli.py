@@ -91,6 +91,12 @@ def verticalize(
     burn_captions: bool = False,
     fps: int = 30,
     overwrite: bool = False,
+    gta_player_anchor: float | None = None,
+    pan_keys_file: Path | None = None,
+    pop_words_file: Path | None = None,
+    pop_language: str = "en",
+    censor_captions: bool = False,
+    credit: str = "",
 ) -> dict:
     """Render one bounded clip from existing source media; never delete the source."""
     source = Path(source).expanduser().resolve()
@@ -119,7 +125,16 @@ def verticalize(
     rects = [_box(cam_box, info["width"], info["height"], "Camera"),
              _box(game_box, info["width"], info["height"], "Gameplay")]
     graph = layouts.render_graph(layout, rects, face_size, width, height)
+    if gta_player_anchor is not None or pan_keys_file is not None:
+        from liveclip.gta_adopt.framing import bounded, fill_filter, read_pan_keys
+        if layout != "fill" or aspect != "vertical" or cam_box or game_box:
+            raise ValueError("GTA pan mode requires --layout fill --aspect vertical and no manual boxes")
+        anchor = bounded(gta_player_anchor if gta_player_anchor is not None else .38)
+        keys = read_pan_keys(pan_keys_file, duration) if pan_keys_file else None
+        graph = fill_filter(width, height, anchor=anchor, keys=keys)
     srt = _captions_for_clip(captions_file, start, start + duration) if captions_file else ""
+    if pop_words_file is not None and burn_captions:
+        raise ValueError("Choose either standard SRT burn-in or pop-word captions, not both.")
     if burn_captions and not srt:
         raise ValueError("--burn-captions needs a valid --captions-file overlapping this clip.")
     ffmpeg = shutil.which("ffmpeg")
@@ -132,6 +147,14 @@ def verticalize(
             if srt:
                 Path(temp, "captions.srt").write_text(srt, encoding="utf-8")
             suffix = ",subtitles=captions.srt" if burn_captions else ""
+            if pop_words_file is not None:
+                from liveclip.gta_adopt.captions import load_words, ass_text
+                pop_words = load_words(pop_words_file)
+                pop_script = ass_text(pop_words, clip_start=start, duration=duration,
+                                      width=width, height=height, language=pop_language,
+                                      censor=censor_captions, credit=credit)
+                Path(temp, "captions.ass").write_text(pop_script, encoding="utf-8")
+                suffix = ",ass=captions.ass"
             vf = f"{graph};[base]{'fps=' + str(fps) + ',' if fps else ''}format=yuv420p{suffix}[outv]"
             cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
                    "-ss", f"{start:.3f}", "-t", f"{duration:.3f}", "-i", str(source),
@@ -153,7 +176,9 @@ def verticalize(
         return {"file": str(dest), "seconds": round(output_info["duration"], 2),
                 "width": width, "height": height, "layout": layout,
                 "captions_sidecar": str(sidecar) if srt else None,
-                "captions_burned": bool(burn_captions and srt),
+                "captions_burned": bool((burn_captions and srt) or pop_words_file is not None),
+                "caption_engine": "gta-popup" if pop_words_file is not None else ("srt" if burn_captions else "none"),
+                "gta_pan_mode": bool(gta_player_anchor is not None or pan_keys_file is not None),
                 "source_preserved": True}
     finally:
         temp_output.unlink(missing_ok=True)
@@ -194,6 +219,12 @@ def _argparser() -> argparse.ArgumentParser:
     vertical.add_argument("--burn-captions", action="store_true")
     vertical.add_argument("--fps", type=int, choices=[24, 30, 60], default=30)
     vertical.add_argument("--overwrite", action="store_true")
+    vertical.add_argument("--gta-player-anchor", type=float, help="Opt-in third-person anchor, normally 0.38; requires fill vertical")
+    vertical.add_argument("--pan-keys-json", type=Path, help="Opt-in normalized player motion keyframes, source-relative to clip")
+    vertical.add_argument("--pop-words-json", type=Path, help="Absolute word-timed source transcript, adds yellow pop captions")
+    vertical.add_argument("--pop-language", choices=["en", "hinglish"], default="en")
+    vertical.add_argument("--censor-captions", action="store_true", help="Optional mask sensitive words in text only")
+    vertical.add_argument("--credit", default="", help="Optional editorial source credit")
 
     vod = sub.add_parser("vod", help="Analyze a local VOD and export top candidate clips vertically")
     vod.add_argument("source", type=Path)
@@ -273,7 +304,13 @@ def main(argv=None) -> int:
                                  layout=args.layout, aspect=args.aspect, resolution=args.resolution,
                                  face_size=args.face_size, cam_box=args.cam_box, game_box=args.game_box,
                                  captions_file=args.captions_file, burn_captions=args.burn_captions,
-                                 fps=args.fps, overwrite=args.overwrite)
+                                 fps=args.fps, overwrite=args.overwrite,
+                                 gta_player_anchor=args.gta_player_anchor,
+                                 pan_keys_file=args.pan_keys_json,
+                                 pop_words_file=args.pop_words_json,
+                                 pop_language=args.pop_language,
+                                 censor_captions=args.censor_captions,
+                                 credit=args.credit)
         elif args.command == "vod":
             if not 1 <= args.count <= 12 or not 10 <= args.seconds <= 180:
                 raise ValueError("VOD supports 1–12 clips of 10–180 seconds each.")
