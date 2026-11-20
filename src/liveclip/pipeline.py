@@ -89,6 +89,9 @@ class SessionDB:
         columns = {row[1] for row in self.connection.execute('PRAGMA table_info(candidates)')}
         if 'review_status' not in columns:
             self.connection.execute("ALTER TABLE candidates ADD COLUMN review_status TEXT NOT NULL DEFAULT 'unreviewed'")
+        for column in ('window_start', 'window_end'):
+            if column not in columns:
+                self.connection.execute(f"ALTER TABLE candidates ADD COLUMN {column} REAL")
         self.connection.commit()
 
     def segments(self) -> list[sqlite3.Row]:
@@ -135,10 +138,27 @@ class SessionDB:
     def exported(self) -> list[sqlite3.Row]:
         return list(self.connection.execute("SELECT * FROM candidates WHERE status='exported' ORDER BY peak_time, id"))
 
-    def mark(self, candidate_id: int, status: str, output_name: str | None = None, error: str | None = None):
+    def mark(self, candidate_id: int, status: str, output_name: str | None = None,
+             error: str | None = None, window: tuple[float, float] | None = None):
         with self.connection:
-            self.connection.execute('UPDATE candidates SET status=?,output_name=?,error=? WHERE id=?',
-                                    (status, output_name, error, candidate_id))
+            self.connection.execute(
+                """UPDATE candidates SET status=?,output_name=?,error=?,
+                   window_start=COALESCE(?,window_start),
+                   window_end=COALESCE(?,window_end) WHERE id=?""",
+                (status, output_name, error, window[0] if window else None,
+                 window[1] if window else None, candidate_id))
+
+    def overlapping_export(self, epoch: int, start: float, end: float) -> bool:
+        """Deny near-identical long outputs; one meaningful event, one clip."""
+        for row in self.connection.execute(
+                """SELECT window_start,window_end FROM candidates
+                   WHERE epoch=? AND status='exported'
+                   AND window_start IS NOT NULL AND window_end IS NOT NULL""", (epoch,)):
+            overlap = max(0, min(end, row['window_end']) - max(start, row['window_start']))
+            shorter = min(end-start, row['window_end']-row['window_start'])
+            if shorter > 0 and overlap / shorter > .45:
+                return True
+        return False
 
     def repair_interrupted(self):
         with self.connection:
@@ -239,6 +259,8 @@ def rebuild_manifest(folder: Path, db: SessionDB | None = None):
                 'signals': json.loads(row['signals_json']),
                 'ocr_matches': json.loads(row['ocr_json']),
                 'review_status': row['review_status'],
+                'window_start': round(row['window_start'], 2) if row['window_start'] is not None else None,
+                'window_end': round(row['window_end'], 2) if row['window_end'] is not None else None,
                 'note': 'Heuristic ranking; manually inspect before publishing.'
             }
             journal.append(json.dumps(data, ensure_ascii=False))
@@ -374,6 +396,11 @@ class HighlightPipeline:
                     continue
                 if not self._finish.is_set() and end < window[1] + 2:
                     continue
+                if db.overlapping_export(row['epoch'], *window):
+                    db.mark(row['id'], 'rejected_overlap',
+                            error='An equivalent event interval was already exported')
+                    self.emit('smart_status', f"Skipped overlapping candidate #{row['id']}")
+                    continue
             # The source recorder independently enforces a low-space guard;
             # exports must not bypass it.
             if shutil.disk_usage(self.folder).free < 512 * 1024 * 1024:
@@ -383,7 +410,8 @@ class HighlightPipeline:
             try:
                 result, actual_seconds = render_highlight(self.folder, row, segments, self.config,
                                                            window=window)
-                db.mark(row['id'], 'exported', str(result.relative_to(self.folder)))
+                db.mark(row['id'], 'exported', str(result.relative_to(self.folder)),
+                        window=window)
                 # SQLite is authoritative, and reports are deterministically
                 # reconciled periodically, at stop, and on resume/review.
                 if db.stats()['exported'] % 20 == 0:
