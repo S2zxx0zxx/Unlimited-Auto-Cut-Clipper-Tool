@@ -18,12 +18,18 @@ Set env = shell.Environment("PROCESS")
 current = env("PATH")
 ffmpegDir = "C:\ffmpeg-9.1-essentials_build\bin"
 If Not fs.FileExists(fs.BuildPath(ffmpegDir,"ffmpeg.exe")) Then
-  MsgBox "FFmpeg not found at " & ffmpegDir & vbCrLf & _
-         "Update this launcher to match your installed FFmpeg folder, or add FFmpeg to PATH.", _
+  ffmpegDir = "C:\ffmpeg\bin"
+End If
+If Not fs.FileExists(fs.BuildPath(ffmpegDir,"ffmpeg.exe")) Then
+  ffmpegDir = "C:\Program Files\ffmpeg\bin"
+End If
+env("PATH") = root & "\System32;" & root & ";" & ffmpegDir & ";" & current
+If shell.Run("cmd.exe /c ffmpeg -version >nul 2>nul", 0, True) <> 0 Then
+  MsgBox "FFmpeg not found." & vbCrLf & _
+         "Install FFmpeg and ffprobe, then retry. Your current PATH was not modified.", _
          vbExclamation, "LiveClip Zero Studio"
   WScript.Quit 1
 End If
-env("PATH") = root & "\System32;" & root & ";" & ffmpegDir & ";" & current
 shell.CurrentDirectory = home
 command = """" & exe & """ -m liveclip.web_studio"
 shell.Run command, 0, False
