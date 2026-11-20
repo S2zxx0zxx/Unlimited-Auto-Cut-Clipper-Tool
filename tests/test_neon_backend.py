@@ -136,6 +136,32 @@ class NeonBackendMedia(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "--cam-box"):
                 verticalize(source, Path(tmp) / "out.mp4", layout="stack", duration=1)
 
+    def test_explicit_facecam_stack_render(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sample.mp4"
+            out = Path(tmp) / "stack.mp4"
+            self.synthetic(source)
+            result = verticalize(source, out, duration=1, layout="stack",
+                                 cam_box="150,5,140,95", game_box="0,0,320,240")
+            self.assertTrue(out.exists())
+            self.assertEqual(result["layout"], "stack")
+
+    def test_burned_subtitles_when_libass_available(self):
+        available = subprocess.run(["ffmpeg", "-hide_banner", "-filters"], capture_output=True,
+                                   text=True, timeout=20).stdout
+        if "subtitles" not in available:
+            self.skipTest("FFmpeg subtitles filter/libass not available")
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sample.mp4"
+            track = Path(tmp) / "words.srt"
+            output = Path(tmp) / "captions_burned.mp4"
+            self.synthetic(source)
+            track.write_text("1\n00:00:00,000 --> 00:00:01,500\nReal captions\n", encoding="utf-8")
+            result = verticalize(source, output, duration=1.5, captions_file=track,
+                                 burn_captions=True)
+            self.assertTrue(result["captions_burned"])
+            self.assertGreater(output.stat().st_size, 1000)
+
     def test_sidecar_subtitle_without_libass(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "sample.mp4"
