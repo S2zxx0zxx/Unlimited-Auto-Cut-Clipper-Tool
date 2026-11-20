@@ -80,6 +80,19 @@ Tests generate **synthetic locally-created media**; FFmpeg and ffprobe are neede
 
 The next-phase build is tracked in the [Advanced Capabilities Master Plan](docs/ADVANCED_CAPABILITIES_MASTER_PLAN.md), the [120-task Execution Ledger](docs/ADVANCED_EXECUTION_LEDGER.md), and the [Research & Architecture Decision Register](docs/ADVANCED_RESEARCH_DECISIONS.md). These are **planned features, not currently shipped**: real-provider reliability, semantic/game-specific event recognition, subject-aware vertical reframing, subtitles/translation, calibrated ranking, multi-stream control, official platform publishing, desktop installers, Chrome/Android clients, 24-hour resilience and release/security certification. Each requires verified acceptance evidence before being marked complete.
 
+## Optional NeonClipping backend (MIT-attributed, no UI replacement)
+
+An opt-in "liveclip-neon" CLI adds local VOD candidate ranking, transcript-aware (optional Ollama) scoring, vertical layout renders, SRT/VTT captions, chunked local speech recognition, transcript prompt splitting, read-only chat hype scoring, and rights-confirmed public VOD URL import. The existing live recorder and GUI are unchanged. This is **not full NeonClipping parity**; automatic facecam detection, live-chat-triggered capture, creator monitoring, saved-edit UI, and social publishing remain pending.
+
+Install only the required extras:
+
+    pip install -e '.[neon]'      # NumPy/OpenCV for VOD ranking
+    pip install -e '.[speech]'    # Optional faster-whisper ASR
+    pip install -e '.[download]'  # Optional yt-dlp VOD import
+    liveclip-neon --help
+
+See [adopted feature matrix, license and examples](docs/NEONCLIPPING_ADOPTION.md). Imported MIT copyright/permission notice is at [THIRD_PARTY_LICENSES/NeonClipping-MIT.txt](THIRD_PARTY_LICENSES/NeonClipping-MIT.txt). Never assume a candidate score predicts virality or that third-party media is licensed for reposting.
+
 ## Licensing
 
 GPL-3.0-only — see the repository `LICENSE`. Third-party software (FFmpeg, Streamlink, Python, Tesseract) retains its own separate license and distribution obligations.
