@@ -24,7 +24,8 @@ NeonClipping is MIT-licensed (Copyright 2026 Ajay K Meena and contributors). The
 | SRT/VTT captions | Yes | Local caption conversion, sidecar, optional FFmpeg burn-in |
 | Local Whisper ASR | Yes | Opt-in chunked local speech transcription (optional weight download) |
 | Hindi/Hinglish transliteration | Yes | Imported and callable via transcription, not quality-certified |
-| Fast VOD selective downloader | Yes | NOT integrated; local files only |
+| Public YouTube/Twitch/Kick VOD importer | Yes | Explicit opt-in full VOD download, no audio-first partial transport |
+| Fast audio-first VOD downloader | Yes | NOT integrated; full source download first |
 | YouTube timed JSON3 caption parser | Yes | Imported library; not wired for arbitrary remote URL fetch |
 | AI manual transcript parts | Yes | CLI prompt-part library; human handoff required |
 | Chat hype/spike | Yes | Offline scoring core; no live chat connection yet |
@@ -61,6 +62,8 @@ Install optional VOD video scoring:  pip install -e '.[neon]'
 
 Install optional speech-to-text:  pip install -e '.[speech]'
 
+Install optional public VOD downloader: pip install -e '.[download]'
+
 Install all local extras:  pip install -e '.[all]'
 
 New CLI: liveclip-neon --help
@@ -83,6 +86,12 @@ The default output is 720x1280. Option --resolution 1080 makes 1080x1920. The so
     liveclip-neon vod video.mp4 output_clips --count 3 --seconds 30 --profile balanced
 
 Requires optional [neon] extras. The ranker is heuristic, not trained gameplay event recognition.
+
+### Public VOD import (finished source, not livestream)
+
+    liveclip-neon vod-url "https://www.youtube.com/watch?v=AUTHORIZED_VIDEO_ID" output_clips --i-have-rights --count 3 --max-gib 3
+
+This is an explicit, rights-confirmed download of the **entire finished public VOD** before local ranking and conversion. It does NOT implement upstream selective audio-first VOD fragment downloads. Provider success has not been independently verified. Only public HTTPS YouTube/Twitch/Kick hosts are accepted; no login cookies, private access or DRM bypass. The rights flag is a self-attestation, not proof that the stream is licensed for redistribution.
 
 ### Captions / transcript
 
@@ -126,7 +135,7 @@ This analyzes aggregate counts only; it does not connect to Twitch or YouTube ch
 2. YuNet facecam detector with model license audit, source frame validation and manual override.
 3. Caption animation/style rendering, transcript editor and saved-clip batch re-rendering.
 4. Durable job scheduling, creator watch, live-status detection and bounded concurrent streams.
-5. Fast source VOD download + official platform caption fetching with URL policy and permission evidence.
+5. Fast selective/audio-first downloads, official platform captions, stricter redirect/DNS controls and provider permission evidence.
 6. Safety-reviewed local phone controller, no globally open control endpoint.
 7. Real provider/OS acceptance and hard-soak benchmarking; per-game semantic accuracy study.
 8. Source-inclusive build/installer and platform publishing with manual approval.
