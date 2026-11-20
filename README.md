@@ -68,6 +68,16 @@ You may capture only streams you own or are authorized to record. Provider suppo
 
 Source recordings are retained by default. "Unlimited" means **no arbitrary software clip-count cap**, not unlimited CPU, storage, upload quotas or uptime.
 
+
+### Terminal interface
+
+The Windows launcher and headless \`liveclip-zero\` recording/analyze commands
+have a compact terminal presentation. It shows actual setup states, recent
+activity and observed event counts without estimating fake progress. The existing
+desktop GUI and media engines are unchanged. Use \`NO_COLOR=1\` or
+\`LIVECLIP_PLAIN=1\` for plain output, and \`LIVECLIP_VERBOSE=1\` for
+detailed interactive logs. See [Compact terminal UI](docs/TERMINAL_UI.md).
+
 ## Diagnose and verify
 
 - Windows: double-click \`CHECK_SETUP_WINDOWS.bat\` to report versions and missing tools.
