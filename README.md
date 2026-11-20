@@ -76,6 +76,10 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 
 Tests generate **synthetic locally-created media**; FFmpeg and ffprobe are needed for the video integration suite. GitHub Actions configuration is provided, but a passing remote run must be checked separately. See [Architecture](docs/ARCHITECTURE.md), [Security](docs/SECURITY.md), [Development](docs/DEVELOPMENT.md) and [Test evidence](docs/TEST_RESULTS.md).
 
+## Future capability roadmap (research and planning only)
+
+The next-phase build is tracked in the [Advanced Capabilities Master Plan](docs/ADVANCED_CAPABILITIES_MASTER_PLAN.md), the [120-task Execution Ledger](docs/ADVANCED_EXECUTION_LEDGER.md), and the [Research & Architecture Decision Register](docs/ADVANCED_RESEARCH_DECISIONS.md). These are **planned features, not currently shipped**: real-provider reliability, semantic/game-specific event recognition, subject-aware vertical reframing, subtitles/translation, calibrated ranking, multi-stream control, official platform publishing, desktop installers, Chrome/Android clients, 24-hour resilience and release/security certification. Each requires verified acceptance evidence before being marked complete.
+
 ## Licensing
 
 GPL-3.0-only — see the repository `LICENSE`. Third-party software (FFmpeg, Streamlink, Python, Tesseract) retains its own separate license and distribution obligations.
