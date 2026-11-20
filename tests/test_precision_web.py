@@ -11,7 +11,7 @@ from threading import Thread
 import unittest
 
 from liveclip.moments import LENGTH_OPTIONS, candidate_window, propose_moments
-from liveclip.pipeline import SmartConfig, render_highlight
+from liveclip.pipeline import SmartConfig, SessionDB, render_highlight, rebuild_manifest
 from liveclip.studio import make_vod_args
 from liveclip.web_studio import HOST, make_server
 
@@ -72,6 +72,28 @@ class PrecisionMoments(unittest.TestCase):
         self.assertIsNotNone(interval)
         self.assertGreaterEqual(interval[0], 20)
         self.assertLessEqual(interval[1], 50)
+
+    def test_persisted_windows_reject_duplicate_long_live_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = SessionDB(root)
+            try:
+                db.mark(12345, "exported", "highlights/not-found.mp4",
+                        window=(10., 170.))  # unknown candidate IDs are no-op
+                from liveclip.signals import Peak
+                peak = Peak(50, 70., ["audio_surge", "rapid_motion"],
+                            {"audio_surge":.8,"motion":.9}, [])
+                self.assertEqual(db.insert_candidate(0,1,50,peak,10),"new")
+                row = db.pending()[0]
+                db.mark(row["id"],"exported","highlights/clip.mp4",window=(20.,150.))
+                self.assertTrue(db.overlapping_export(0,80.,190.))
+                self.assertFalse(db.overlapping_export(0,180.,245.))
+                rebuild_manifest(root,db)
+                info = json.loads((root / "highlights.jsonl").read_text().splitlines()[0])
+                self.assertEqual(info["window_start"],20)
+                self.assertEqual(info["window_end"],150)
+            finally:
+                db.close()
 
     def test_vod_validates_precision_and_300s_without_new_engine(self):
         with tempfile.TemporaryDirectory() as d:
