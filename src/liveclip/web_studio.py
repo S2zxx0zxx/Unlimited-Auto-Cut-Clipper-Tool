@@ -435,7 +435,8 @@ class Handler(BaseHTTPRequestHandler):
             page = PAGE.replace("__TOKEN__", self.server.token).replace(
                 "__DEFAULT_ROOT__", str(DEFAULT_ROOT).replace("&","&amp;").replace("<","&lt;").replace('"',"&quot;"))
             payload = page.encode("utf-8")
-            self._headers(200, "text/html; charset=utf-8",len(payload))
+            self._headers(200, "text/html; charset=utf-8",len(payload),
+                          {"Set-Cookie":f"LCSESSION={self.server.token}; HttpOnly; SameSite=Strict; Path=/"})
             self.wfile.write(payload)
             return
         if uri.path == "/api/state":
@@ -445,6 +446,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self.server.state.snapshot())
             return
         if uri.path == "/media":
+            # HTML5 video elements cannot send API headers. Use a Strict
+            # browser cookie so a third-party site cannot embed recordings.
+            cookie_ok = any(
+                pair.strip() == f"LCSESSION={self.server.token}"
+                for pair in self.headers.get("Cookie", "").split(";"))
+            if not cookie_ok:
+                self._json({"error":"Local session required"},403)
+                return
             args = parse_qs(uri.query)
             name = args.get("name", [""])[0]
             kind = args.get("kind", [""])[0]
