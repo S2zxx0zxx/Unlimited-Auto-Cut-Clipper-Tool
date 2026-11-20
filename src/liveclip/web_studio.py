@@ -222,8 +222,11 @@ class WebState:
                 roots.append((self.latest_output, "vod"))
             for folder, kind in roots:
                 if folder.is_dir():
-                    for p in sorted(folder.glob("*.mp4"), key=lambda p:p.stat().st_mtime, reverse=True)[:15]:
-                        if VIDEO_NAME.fullmatch(p.name) and p.stat().st_size > 500:
+                    files = sorted(folder.glob("*.mp4"), key=lambda p:p.stat().st_mtime, reverse=True)
+                    # Do not offer a file that FFmpeg may still be writing.
+                    current_source = files[0] if kind == "source" and self.recorder.active and files else None
+                    for p in files[:15]:
+                        if p != current_source and VIDEO_NAME.fullmatch(p.name) and p.stat().st_size > 500:
                             assets.append({"kind":kind, "name":p.name})
             return {"status":self.status, "detail":self.detail, "error":self.error,
                     "busy":self.busy(), "recording":self.recorder.active,
