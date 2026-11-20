@@ -192,3 +192,30 @@ Status transition + timestamp:
 - PR #3 introduces opt-in MIT-attributed backend algorithms and new CLI, without replacing live recorder or GUI.
 - LC-04.02 / LC-05.02 / LC-06.05 are IN_PROGRESS because their current implementations cover only part of each full acceptance requirement; do not mark VERIFIED.
 - Other LC tasks remain TODO until code, real-device/provider evidence and criteria are proven. See docs/NEONCLIPPING_ADOPTION.md for the exact feature parity table and first-party limitations.
+
+## Third-upstream GTA Auto Clipper follow-up ledger (2026-11-20)
+
+Pinned source: `AnIntellectualBeing/GTA-Auto-Clipper@a9ac2ba8`. All 57 source files accounted for in [GTA audit](GTA_AUTO_CLIPPER_AUDIT.md). The existing 120 LC-xx granular tasks remain unchanged; GTA items below are a **supplemental cross-referenced gate list**, not replacements or duplicate implementations.
+
+| ID | Independent acceptance requirement | Status | Evidence / blocker |
+|---|---|---|---|
+| GA-01 | Pinned 57-file upstream inventory + license/provenance | IMPLEMENTED_UNVERIFIED | PR #4, docs/GTA_AUTO_CLIPPER_AUDIT.md |
+| GA-02 | No-duplicate feature mapping against current LiveClip/Neon | IMPLEMENTED_UNVERIFIED | PR #4, audit matrix |
+| GA-03 | Player-centred FFmpeg crop with explicit anchor | IMPLEMENTED_UNVERIFIED | PR #4 synthetic FFmpeg tests; real gameplay pending |
+| GA-04 | Bounded smoothed player-follow pan keyframes | IMPLEMENTED_UNVERIFIED | PR #4 pure/synthetic tests; real visual QA pending |
+| GA-05 | Local YOLOX CPU detector with trusted model weights | IMPLEMENTED_UNVERIFIED | PR #4 optional backend only, real ONNX accuracy unverified |
+| GA-06 | Real GTA footage benchmark for person/camera/HUD retention | TODO | Requires authorized footage + labelled boxes |
+| GA-07 | Automatic facecam region detection (single YuNet model authority) | TODO | Neon/GTA source candidate; no duplicate model copy |
+| GA-08 | Word-timed single-position yellow pop ASS captions | IMPLEMENTED_UNVERIFIED | PR #4 synthetic libass render; real-language timing QA pending |
+| GA-09 | Hindi/Hinglish pop caption and safe-area real-device QA | TODO | Check fonts, overlays, drift, language |
+| GA-10 | Distinct-viewer/reaction anti-spam chat scoring | IMPLEMENTED_UNVERIFIED | PR #4 offline tests; no realtime ingestion |
+| GA-11 | Live authenticated chat reader with consent/credential validation | TODO | YouTube/Twitch official terms, secure secrets |
+| GA-12 | Chat-to-video PTS/epoch mapping and auto-triggered export | TODO | Requires real provider, reconnect tests |
+| GA-13 | Read-only YouTube live discovery using user-provided API key | IMPLEMENTED_UNVERIFIED | PR #4 mocked tests; real provider pending |
+| GA-14 | Game footage visual confirmation and source-rights audit UX | TODO | No thumbnail-based/automatic permission assumptions |
+| GA-15 | Publishing vendor evaluation (Zernio vs official OAuth) | BLOCKED | No account access/pricing/compliance confirmation |
+| GA-16 | Dry-run-first scheduling and approved per-platform receipts | TODO | Needs rights records and provider access |
+| GA-17 | Multi-agent isolated capture/checker/veto work queues | TODO | Depends on durable job leasing and QA |
+| GA-18 | 24h real-world soak, release baseline and host performance | TODO | Needs actual device/provider tests |
+
+**Statuses here are provisional until PR #4 merges on green CI.** `IMPLEMENTED_UNVERIFIED` means source/test subset exists, not a released user-facing feature or model-accuracy proof. Never mark GA-05 or GA-13 VERIFIED without trusted model/provider acceptance. Existing LC-04 (framing), LC-05 (captions), LC-06 (ranking), LC-08 (publishing), LC-11/12 (stability/security) remain authoritative release gates.
