@@ -112,10 +112,11 @@ def rank(source, duration, count=4, length=30, report=lambda seconds: None, moti
         e = np.zeros(n); e[:min(n, len(extra))] = extra[:n]
         sig = .75 * sig + .25 * e
     width = min(n, 7); smooth = np.convolve(sig, np.ones(width) / width, 'same')
+    requested_length = int(length)
     length = min(float(length), duration); clips = []
     if precision:
         from liveclip.moments import propose_moments
-        proposals = propose_moments(motion, loud, shout, cut, maximum_seconds=int(length),
+        proposals = propose_moments(motion, loud, shout, cut, maximum_seconds=requested_length,
                                     count=count)
         for moment in proposals:
             lo, hi = int(moment.start), max(int(moment.start) + 1, int(moment.end))
