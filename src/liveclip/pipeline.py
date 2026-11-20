@@ -375,17 +375,27 @@ class HighlightPipeline:
                 audio = signals.get('audio_surge', 0) >= .35 or signals.get('audio_onset', 0) >= .35
                 video = signals.get('motion', 0) >= .35 or signals.get('scene', 0) >= .45
                 text = bool(json.loads(row['ocr_json']))
-                if not ((audio and video) or (text and (audio or video))):
-                    db.mark(row['id'], 'rejected_weak', error='No independent evidence corroboration')
-                    self.emit('smart_status', f"Skipped weak event #{row['id']}; no arbitrary highlight generated")
-                    continue
-                neighbours = [r['peak_time'] for r in db.connection.execute(
-                    """SELECT peak_time FROM candidates
+                nearby_rows = list(db.connection.execute(
+                    """SELECT peak_time,signals_json,score FROM candidates
                        WHERE epoch=? AND peak_time BETWEEN ? AND ? AND score>=?
-                       AND status IN ('pending','exported','rendering')""",
+                       AND status IN ('pending','exported','rendering','rejected_weak')""",
                     (row['epoch'], max(current_epoch[0]['timeline_start'],
                                       row['peak_time'] - self.config.highlight_seconds * .62),
-                     end, max(self.config.threshold, 25)))]
+                     end, max(self.config.threshold, 25))))
+                neighbours = [r['peak_time'] for r in nearby_rows]
+                # Muted racing/action can still be real motion: demand
+                # multiple separated, independently measured visual peaks,
+                # not one scene cut or brightness flash.
+                visual_times = sorted(r['peak_time'] for r in nearby_rows
+                                      if json.loads(r['signals_json']).get('motion', 0) >= .55)
+                sustained_visual = (len(visual_times) >= 3 and
+                                    visual_times[-1] - visual_times[0] >= 25)
+                if not ((audio and video) or (text and (audio or video)) or sustained_visual):
+                    if self._finish.is_set():
+                        db.mark(row['id'], 'rejected_weak',
+                                error='No corroboration or sustained visual evidence')
+                        self.emit('smart_status', f"Skipped weak event #{row['id']}")
+                    continue
                 window = candidate_window(
                     row['peak_time'], neighbours, limit=self.config.highlight_seconds,
                     epoch_start=current_epoch[0]['timeline_start'], epoch_end=end)
