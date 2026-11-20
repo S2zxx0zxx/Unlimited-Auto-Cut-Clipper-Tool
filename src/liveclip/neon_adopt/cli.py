@@ -254,6 +254,9 @@ def _argparser() -> argparse.ArgumentParser:
     vod.add_argument("--no-motion", action="store_true")
     vod.add_argument("--smart", action="store_true", help="Optional transcript-aware scoring with local Ollama")
     vod.add_argument("--words-json", type=Path, help="Full source word transcript from the transcribe command")
+    vod.add_argument("--gta-player-anchor", type=float, help="Optional GTA player anchor for --layout fill")
+    vod.add_argument("--pop-captions", action="store_true", help="Use --words-json to burn per-word ASS captions")
+    vod.add_argument("--pop-language", choices=["en", "hinglish"], default="en")
 
     asr = sub.add_parser("transcribe", help="Transcribe local source to word JSON and SRT (optional local speech model)")
     asr.add_argument("source", type=Path)
@@ -337,6 +340,12 @@ def main(argv=None) -> int:
         elif args.command == "vod":
             if not 1 <= args.count <= 12 or not 10 <= args.seconds <= 180:
                 raise ValueError("VOD supports 1–12 clips of 10–180 seconds each.")
+            if args.pop_captions and not args.words_json:
+                raise ValueError("--pop-captions requires --words-json.")
+            if args.pop_captions and args.burn_captions:
+                raise ValueError("Choose either --pop-captions or --burn-captions.")
+            if args.gta_player_anchor is not None and args.layout != "fill":
+                raise ValueError("--gta-player-anchor requires --layout fill.")
             info = _media_info(args.source)
             if info["duration"] > MAX_VOD_SECONDS:
                 raise ValueError("VOD exceeds 4-hour resource safety limit in this release.")
@@ -371,7 +380,10 @@ def main(argv=None) -> int:
                                    duration=float(candidate["end"]) - float(candidate["start"]),
                                    layout=args.layout, cam_box=args.cam_box, game_box=args.game_box,
                                    captions_file=args.captions_file, burn_captions=args.burn_captions,
-                                   resolution=args.resolution)
+                                   resolution=args.resolution,
+                                   gta_player_anchor=args.gta_player_anchor,
+                                   pop_words_file=args.words_json if args.pop_captions else None,
+                                   pop_language=args.pop_language)
                 outputs.append({**candidate, "asset": clip})
             result = {"source": str(args.source), "mode": engine,
                       "outputs": outputs, "notice": "Candidate ranking, not a calibrated virality probability"}
