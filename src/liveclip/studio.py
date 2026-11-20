@@ -19,11 +19,12 @@ from uuid import uuid4
 
 def make_vod_args(source: Path, folder: Path, *, count: int = 3,
                   seconds: int = 30, profile: str = "balanced",
-                  layout: str = "blur") -> list[str]:
+                  layout: str = "blur", precision: bool = False) -> list[str]:
     """Validate and prepare a deterministic existing-engine request."""
     from .neon_adopt.curation import PROFILES
-    if count not in (1, 3, 5) or seconds not in (15, 30, 60):
-        raise ValueError("Choose 1, 3 or 5 clips and 15, 30 or 60 seconds.")
+    from .moments import LENGTH_OPTIONS
+    if count not in (1, 3, 5) or seconds not in LENGTH_OPTIONS:
+        raise ValueError("Choose 1, 3 or 5 clips and a length up to 300 seconds.")
     if profile not in PROFILES:
         raise ValueError("Unknown analysis profile.")
     if layout not in ("blur", "fill"):
@@ -34,8 +35,11 @@ def make_vod_args(source: Path, folder: Path, *, count: int = 3,
         raise ValueError("Choose an existing MP4, MKV, MOV or WebM video file.")
     if target == path or path in target.parents:
         raise ValueError("Output folder cannot be the input video.")
-    return ["vod", str(path), str(target), "--count", str(count),
+    args = ["vod", str(path), str(target), "--count", str(count),
             "--seconds", str(seconds), "--profile", profile, "--layout", layout]
+    if precision:
+        args.append("--precision")
+    return args
 
 
 def demo_ffmpeg_args(destination: Path) -> list[str]:
@@ -67,6 +71,7 @@ class LocalShortsStudio:
         self.seconds = tk.StringVar(master=root, value="30")
         self.profile = tk.StringVar(master=root, value="balanced")
         self.layout = tk.StringVar(master=root, value="blur")
+        self.precision = tk.BooleanVar(master=root, value=True)
         self.status = tk.StringVar(master=root, value="Choose a video or generate a demo, then create shorts.")
         self.last_folder: Path | None = None
         self._busy = False
@@ -95,7 +100,7 @@ class LocalShortsStudio:
         options.pack(fill="x", pady=(14, 4))
         settings = [
             ("Highlights", self.count, ["1", "3", "5"]),
-            ("Each clip", self.seconds, ["15", "30", "60"]),
+            ("Max duration", self.seconds, ["15", "30", "45", "60", "90", "120", "180", "300"]),
             ("Find moments", self.profile, ["balanced", "action", "dialogue"]),
             ("Vertical style", self.layout, ["blur", "fill"]),
         ]
@@ -103,6 +108,10 @@ class LocalShortsStudio:
             ttk.Label(options, text=name).grid(row=0, column=i, sticky="w", padx=(0, 12))
             ttk.Combobox(options, textvariable=state, values=items, state="readonly",
                          width=15).grid(row=1, column=i, sticky="w", padx=(0, 12), pady=(5, 3))
+        ttk.Checkbutton(self.frame, text="Precision moments: require sustained activity; no random filler (recommended)",
+                        variable=self.precision).pack(anchor="w", pady=(8, 3))
+        ttk.Label(self.frame, text="Max duration is a ceiling; meaningful moments may be shorter.",
+                  style="Hint.TLabel").pack(anchor="w")
         ttk.Label(self.frame, text="blur = preserve full gameplay with blurred background  •  "
                   "fill = crop to fill the vertical frame",
                   style="Hint.TLabel").pack(anchor="w", pady=(5, 12))
@@ -177,6 +186,7 @@ class LocalShortsStudio:
             self.source.set(str(payload["demo"]))
             self.count.set("1")
             self.seconds.set("15")
+            self.precision.set(False)  # Only the synthetic demo explicitly uses legacy test candidate ranking
         self.log_callback(payload["message"])
 
     def _run_vod(self, args: list[str], folder: Path):
@@ -187,8 +197,9 @@ class LocalShortsStudio:
                                "verify that optional analysis dependencies are installed.")
         clips = sorted(folder.glob("highlight_*.mp4"))
         if not clips:
-            raise RuntimeError("No highlight candidate was exported. Try a shorter clip duration "
-                               "or choose a longer, more active source video.")
+            return {"folder": folder, "message": (
+                "No strong event found: no arbitrary clips exported. "
+                "Try a longer active video or turn off precision for a manual review-only sample.")}
         return {"folder": folder, "message": f"Created {len(clips)} highlight MP4(s) in {folder}"}
 
     def create(self):
@@ -197,7 +208,7 @@ class LocalShortsStudio:
             folder = root / ("Shorts_" + datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid4().hex[:6])
             args = make_vod_args(Path(self.source.get()), folder, count=int(self.count.get()),
                                  seconds=int(self.seconds.get()), profile=self.profile.get(),
-                                 layout=self.layout.get())
+                                 layout=self.layout.get(), precision=self.precision.get())
             if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
                 raise RuntimeError("FFmpeg and ffprobe must both be on your PATH.")
         except (OSError, ValueError, RuntimeError) as exc:

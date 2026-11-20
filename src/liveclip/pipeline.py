@@ -19,6 +19,7 @@ import time
 from typing import Callable
 
 from .signals import analyze_segment, probe_video
+from .moments import LENGTH_OPTIONS, candidate_window
 
 SEGMENT_RE = re.compile(r'^clip_(\d{6})\.mp4$')
 
@@ -35,6 +36,7 @@ class SmartConfig:
     cooldown_seconds: int = 25
     ocr: bool = False
     poll_seconds: float = 1.0
+    precision: bool = False  # Opt-in from desktop/web; preserves existing CLI/test sessions
 
     def validate(self):
         from .signals import PROFILES
@@ -42,8 +44,8 @@ class SmartConfig:
             raise ValueError('Invalid smart profile')
         if not 0 <= self.threshold <= 100:
             raise ValueError('Threshold must be 0 to 100')
-        if self.highlight_seconds not in (15, 30, 45, 60):
-            raise ValueError('Highlight length must be 15, 30, 45 or 60')
+        if self.highlight_seconds not in LENGTH_OPTIONS:
+            raise ValueError('Highlight length must be 15–300 seconds')
         if not 0 <= self.cooldown_seconds <= 240:
             raise ValueError('Cooldown must be between 0 and 240 seconds')
         if not .2 <= self.poll_seconds <= 15:
@@ -87,6 +89,9 @@ class SessionDB:
         columns = {row[1] for row in self.connection.execute('PRAGMA table_info(candidates)')}
         if 'review_status' not in columns:
             self.connection.execute("ALTER TABLE candidates ADD COLUMN review_status TEXT NOT NULL DEFAULT 'unreviewed'")
+        for column in ('window_start', 'window_end'):
+            if column not in columns:
+                self.connection.execute(f"ALTER TABLE candidates ADD COLUMN {column} REAL")
         self.connection.commit()
 
     def segments(self) -> list[sqlite3.Row]:
@@ -133,10 +138,27 @@ class SessionDB:
     def exported(self) -> list[sqlite3.Row]:
         return list(self.connection.execute("SELECT * FROM candidates WHERE status='exported' ORDER BY peak_time, id"))
 
-    def mark(self, candidate_id: int, status: str, output_name: str | None = None, error: str | None = None):
+    def mark(self, candidate_id: int, status: str, output_name: str | None = None,
+             error: str | None = None, window: tuple[float, float] | None = None):
         with self.connection:
-            self.connection.execute('UPDATE candidates SET status=?,output_name=?,error=? WHERE id=?',
-                                    (status, output_name, error, candidate_id))
+            self.connection.execute(
+                """UPDATE candidates SET status=?,output_name=?,error=?,
+                   window_start=COALESCE(?,window_start),
+                   window_end=COALESCE(?,window_end) WHERE id=?""",
+                (status, output_name, error, window[0] if window else None,
+                 window[1] if window else None, candidate_id))
+
+    def overlapping_export(self, epoch: int, start: float, end: float) -> bool:
+        """Deny near-identical long outputs; one meaningful event, one clip."""
+        for row in self.connection.execute(
+                """SELECT window_start,window_end FROM candidates
+                   WHERE epoch=? AND status='exported'
+                   AND window_start IS NOT NULL AND window_end IS NOT NULL""", (epoch,)):
+            overlap = max(0, min(end, row['window_end']) - max(start, row['window_start']))
+            shorter = min(end-start, row['window_end']-row['window_start'])
+            if shorter > 0 and overlap / shorter > .45:
+                return True
+        return False
 
     def repair_interrupted(self):
         with self.connection:
@@ -160,16 +182,20 @@ def _concat_quote(path: Path) -> str:
 
 
 def render_highlight(folder: Path, row: sqlite3.Row, segments: list[sqlite3.Row],
-                     config: SmartConfig) -> tuple[Path, float]:
+                     config: SmartConfig, window: tuple[float, float] | None = None) -> tuple[Path, float]:
     same_epoch = [s for s in segments if s['epoch'] == row['epoch']]
     if not same_epoch:
         raise ValueError('Candidate epoch not found')
     timeline_start = same_epoch[0]['timeline_start']
     timeline_end = same_epoch[-1]['timeline_start'] + same_epoch[-1]['duration']
-    preroll = config.highlight_seconds * .40
-    wanted_start = max(timeline_start, row['peak_time'] - preroll)
-    wanted_end = min(timeline_end, wanted_start + config.highlight_seconds)
-    wanted_start = max(timeline_start, wanted_end - config.highlight_seconds)
+    if window is not None:
+        wanted_start = max(timeline_start, window[0])
+        wanted_end = min(timeline_end, window[1])
+    else:
+        preroll = config.highlight_seconds * .40
+        wanted_start = max(timeline_start, row['peak_time'] - preroll)
+        wanted_end = min(timeline_end, wanted_start + config.highlight_seconds)
+        wanted_start = max(timeline_start, wanted_end - config.highlight_seconds)
     # No clips across unexpected gaps/reconnect boundaries.
     selected = [s for s in same_epoch
                 if s['timeline_start'] + s['duration'] > wanted_start + 1e-3
@@ -233,6 +259,8 @@ def rebuild_manifest(folder: Path, db: SessionDB | None = None):
                 'signals': json.loads(row['signals_json']),
                 'ocr_matches': json.loads(row['ocr_json']),
                 'review_status': row['review_status'],
+                'window_start': round(row['window_start'], 2) if row['window_start'] is not None else None,
+                'window_end': round(row['window_end'], 2) if row['window_end'] is not None else None,
                 'note': 'Heuristic ranking; manually inspect before publishing.'
             }
             journal.append(json.dumps(data, ensure_ascii=False))
@@ -334,10 +362,55 @@ class HighlightPipeline:
             if not current_epoch:
                 continue
             end = current_epoch[-1]['timeline_start'] + current_epoch[-1]['duration']
-            required_end = row['peak_time'] + self.config.highlight_seconds * .60
+            required_end = row['peak_time'] + min(self.config.highlight_seconds * .60, 180)
             # Wait for post-roll, unless recording has stopped / folder is complete.
             if not self._finish.is_set() and end < required_end:
                 continue
+            window = None
+            if self.config.precision:
+                # A peak alone never proves a race/match event. Conservative
+                # mode rejects weak or single-source random scene flashes.
+                reasons = set(json.loads(row['reasons_json']))
+                signals = json.loads(row['signals_json'])
+                audio = signals.get('audio_surge', 0) >= .35 or signals.get('audio_onset', 0) >= .35
+                video = signals.get('motion', 0) >= .35 or signals.get('scene', 0) >= .45
+                text = bool(json.loads(row['ocr_json']))
+                nearby_rows = list(db.connection.execute(
+                    """SELECT peak_time,signals_json,score FROM candidates
+                       WHERE epoch=? AND peak_time BETWEEN ? AND ? AND score>=?
+                       AND status IN ('pending','exported','rendering','rejected_weak')""",
+                    (row['epoch'], max(current_epoch[0]['timeline_start'],
+                                      row['peak_time'] - self.config.highlight_seconds * .62),
+                     end, max(self.config.threshold, 25))))
+                neighbours = [r['peak_time'] for r in nearby_rows]
+                # Muted racing/action can still be real motion: demand
+                # multiple separated, independently measured visual peaks,
+                # not one scene cut or brightness flash.
+                visual_times = sorted(r['peak_time'] for r in nearby_rows
+                                      if json.loads(r['signals_json']).get('motion', 0) >= .55)
+                sustained_visual = (len(visual_times) >= 3 and
+                                    visual_times[-1] - visual_times[0] >= 25)
+                if not ((audio and video) or (text and (audio or video)) or sustained_visual):
+                    if self._finish.is_set():
+                        db.mark(row['id'], 'rejected_weak',
+                                error='No corroboration or sustained visual evidence')
+                        self.emit('smart_status', f"Skipped weak event #{row['id']}")
+                    continue
+                window = candidate_window(
+                    row['peak_time'], neighbours, limit=self.config.highlight_seconds,
+                    epoch_start=current_epoch[0]['timeline_start'], epoch_end=end)
+                if window is None:
+                    if self._finish.is_set():
+                        db.mark(row['id'], 'rejected_weak',
+                                error='Insufficient sustained evidence for requested clip length')
+                    continue
+                if not self._finish.is_set() and end < window[1] + 2:
+                    continue
+                if db.overlapping_export(row['epoch'], *window):
+                    db.mark(row['id'], 'rejected_overlap',
+                            error='An equivalent event interval was already exported')
+                    self.emit('smart_status', f"Skipped overlapping candidate #{row['id']}")
+                    continue
             # The source recorder independently enforces a low-space guard;
             # exports must not bypass it.
             if shutil.disk_usage(self.folder).free < 512 * 1024 * 1024:
@@ -345,8 +418,10 @@ class HighlightPipeline:
                 return
             db.mark(row['id'], 'rendering')
             try:
-                result, actual_seconds = render_highlight(self.folder, row, segments, self.config)
-                db.mark(row['id'], 'exported', str(result.relative_to(self.folder)))
+                result, actual_seconds = render_highlight(self.folder, row, segments, self.config,
+                                                           window=window)
+                db.mark(row['id'], 'exported', str(result.relative_to(self.folder)),
+                        window=window)
                 # SQLite is authoritative, and reports are deterministically
                 # reconciled periodically, at stop, and on resume/review.
                 if db.stats()['exported'] % 20 == 0:

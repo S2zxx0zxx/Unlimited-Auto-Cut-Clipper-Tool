@@ -16,7 +16,7 @@ from liveclip.studio import make_vod_args, demo_ffmpeg_args
 
 class StudioArguments(unittest.TestCase):
     def test_brand_version_and_default_studio_settings(self):
-        self.assertEqual(__version__, "2.4.0")
+        self.assertEqual(__version__, "2.5.0")
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "my gameplay.mp4"
             source.write_bytes(b"local-test-input")

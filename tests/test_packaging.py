@@ -7,7 +7,7 @@ from liveclip.capture import validate_url
 
 class PackagingTests(unittest.TestCase):
     def test_version_and_commands(self):
-        self.assertEqual(__version__, '2.4.0')
+        self.assertEqual(__version__, '2.5.0')
         for command in ('doctor', 'record', 'analyze'):
             self.assertIsNotNone(build_parser()._subparsers._actions)
         self.assertEqual(build_parser().parse_args(['doctor']).action, 'doctor')

@@ -98,7 +98,7 @@ def _z(x, n, win=120):
     mu = np.convolve(y, k, 'same'); sd = np.sqrt(np.maximum(np.convolve(y * y, k, 'same') - mu * mu, 0)) + 1e-6
     return np.clip((y - mu) / sd / 3.5, 0, 1)
 
-def rank(source, duration, count=4, length=30, report=lambda seconds: None, motion_on=True, extra=None):
+def rank(source, duration, count=4, length=30, report=lambda seconds: None, motion_on=True, extra=None, precision=False):
     with ThreadPoolExecutor(max_workers=2) as pool:
         m = pool.submit(_motion, source, duration, report) if motion_on else pool.submit(lambda: (np.zeros(0), np.zeros(0))); a = pool.submit(_audio, source)
         (flow, cuts), (rms, hf) = m.result(), a.result()
@@ -112,7 +112,30 @@ def rank(source, duration, count=4, length=30, report=lambda seconds: None, moti
         e = np.zeros(n); e[:min(n, len(extra))] = extra[:n]
         sig = .75 * sig + .25 * e
     width = min(n, 7); smooth = np.convolve(sig, np.ones(width) / width, 'same')
+    requested_length = int(length)
     length = min(float(length), duration); clips = []
+    if precision:
+        from liveclip.moments import propose_moments
+        proposals = propose_moments(motion, loud, shout, cut, maximum_seconds=requested_length,
+                                    count=count)
+        for moment in proposals:
+            lo, hi = int(moment.start), max(int(moment.start) + 1, int(moment.end))
+            clips.append({'start': moment.start, 'end': moment.end,
+                          'title': 'Evidence-based moment',
+                          'score': moment.score,
+                          'reason': 'Corroborated activity: ' + ' + '.join(moment.evidence),
+                          'status': 'done',
+                          'precision_mode': True,
+                          'peak_time': moment.peak,
+                          'confidence': moment.confidence,
+                          'features': {
+                              'loud': float(loud[lo:hi].mean()) if has_audio else None,
+                              'shout': float(shout[lo:hi].mean()) if has_audio else None,
+                              'motion': float(motion[lo:hi].mean()) if motion_on else None,
+                              'cuts': float(cut[lo:hi].mean()) if motion_on else None,
+                          }})
+        return clips
+
     for center in np.argsort(smooth)[::-1]:
         start = max(0, min(float(center) - length * .4, duration - length)); end = min(duration, start + length)
         if any(min(end, c['end']) - max(start, c['start']) > 0 for c in clips): continue

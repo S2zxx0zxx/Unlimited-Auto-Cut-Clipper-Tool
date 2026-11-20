@@ -6,6 +6,22 @@ A desktop video workspace for **recording authorized livestreams**, finding high
 
 **Start here:** [Windows quick start](docs/QUICK_START.md) · [Mac/Linux setup](docs/QUICK_START.md#macos-and-linux) · [Troubleshooting](docs/TROUBLESHOOTING.md)
 
+## New in 2.5 — Private localhost Studio and precision moments
+
+**Existing users on Windows:** once updated to this source version, keep your existing Python 3.12 environment (`.venv`), FFmpeg 9.1 installation and saved recordings. Double-click **START_WEB_STUDIO.vbs** in the project folder. Your private localhost browser tab opens automatically. You do **not** need to open CMD for every recording. No paid AI or cloud service is involved.
+
+**First-time install:** install Python 3.10+ with functional Tk/Tcl and FFmpeg/ffprobe; run **START_WINDOWS.bat** once to create the local `.venv`. Thereafter the web launcher reuses it.
+
+The browser workspace lets you:
+- Paste your **own or authorized live URL**, choose 30/60s source segmentation, up to **300-second highlight maximum**, then click **START LIVE + SMART** and **STOP + FINISH**.
+- Paste a local recorded video path (in Windows File Explorer, **Shift+right-click → Copy as path**), choose 1/3/5 clips, activity profile and layout, then generate up-to-5-minute highlight candidates.
+- Use **Precision mode** to group corroborated activity into time intervals and decline weak/no-evidence moments instead of forcing random cuts. **Max duration is a cap, not a guarantee.**
+- Monitor progress and preview saved MP4s in the browser with local HTTP range playback; your files stay on your laptop.
+
+The web service binds **only to 127.0.0.1** with a random port and per-launch token. It does not expose a public site, forward media to a paid API, or post to social platforms. Closing the browser tab does not necessarily stop the local server or active capture; press **STOP + FINISH** first. If you need a visible diagnostic terminal, run START_WEB_STUDIO_DEBUG.bat.
+
+Technical note: current detector understands audio spikes, visual activity, transitions and sustained evidence. It **does not guarantee** race start/finish, chase resolution, wins, jokes, or viral quality without validated game-specific models. Review the first and last frames; if no clear event is present, Precision mode may rightly produce **zero** clips. The existing 30/60-second recorder segments remain separate from the variable-length final outputs. See [Research, acceptance and open gates](docs/PRECISION_WEB_STUDIO_V2_5.md).
+
 ## Get your first result (Windows)
 
 1. Install [Python 3.10+](https://www.python.org/downloads/windows/) and [FFmpeg + ffprobe](https://ffmpeg.org/download.html). They must be available in your Windows PATH. You only need to install these once.
