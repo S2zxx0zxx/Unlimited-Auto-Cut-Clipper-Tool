@@ -14,8 +14,9 @@ from tkinter import filedialog, messagebox, ttk
 from .capture import Recorder, CaptureConfig
 from .pipeline import HighlightPipeline, SmartConfig, SessionDB, rebuild_manifest
 from .signals import PROFILES
+from .studio import LocalShortsStudio
 
-APP_TITLE = 'LiveClip Zero Smart — Local Highlights'
+APP_TITLE = 'LiveClip Zero Studio — Local Highlights'
 SETTINGS = Path.home() / '.liveclip_zero_smart_settings.json'
 BG = '#111722'
 FG = '#f4f7ff'
@@ -37,8 +38,8 @@ class App:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
-        self.root.geometry('900x730')
-        self.root.minsize(770, 660)
+        self.root.geometry('980x790')
+        self.root.minsize(800, 690)
         self.events: queue.Queue = queue.Queue()
         self.recorder = Recorder(self.events)
         self.pipeline: HighlightPipeline | None = None
@@ -81,7 +82,7 @@ class App:
         style.configure('TCheckbutton', background=BG, foreground=FG)
         outer = ttk.Frame(self.root, padding=18)
         outer.pack(fill='both', expand=True)
-        ttk.Label(outer, text='LIVECLIP ZERO  /  SMART', style='Title.TLabel').pack(anchor='w')
+        ttk.Label(outer, text='LIVECLIP ZERO STUDIO', style='Title.TLabel').pack(anchor='w')
         ttk.Label(outer, text='Private by default  •  Zero paid APIs  •  Auto-record + highlight candidates  •  Manual review recommended',
                   style='Hint.TLabel').pack(anchor='w', pady=(3, 12))
         tabs = ttk.Notebook(outer)
@@ -92,6 +93,11 @@ class App:
         tabs.add(live_tab, text='Live + Smart')
         tabs.add(replay_tab, text='Analyze existing folder')
         tabs.add(review_tab, text='Review highlights')
+        self.studio = LocalShortsStudio(
+            tabs, self.root,
+            lambda: not self.recorder.active and not bool(self.pipeline and self.pipeline.active),
+            self.note,
+        )
         ttk.Label(live_tab, text='Livestream URL (Streamlink-supported, authorized sources)').pack(anchor='w')
         ttk.Entry(live_tab, textvariable=self.url).pack(fill='x', pady=(6, 12))
         live_opts = ttk.Frame(live_tab)
@@ -203,8 +209,8 @@ class App:
             self.output.set(folder)
 
     def _assert_idle(self):
-        if self.recorder.active or (self.pipeline and self.pipeline.active):
-            raise RuntimeError('A session is already active; finish it before starting a new one')
+        if self.recorder.active or (self.pipeline and self.pipeline.active) or self.studio.is_busy():
+            raise RuntimeError('A recording, analysis or Studio task is active. Finish it first.')
 
     def start(self):
         try:
@@ -325,7 +331,7 @@ class App:
             messagebox.showerror('Review could not save', str(exc))
 
     def _update_buttons(self):
-        busy = self.recorder.active or bool(self.pipeline and self.pipeline.active)
+        busy = self.recorder.active or bool(self.pipeline and self.pipeline.active) or self.studio.is_busy()
         self.start_btn.config(state='disabled' if busy else 'normal')
         self.folder_btn.config(state='disabled' if busy else 'normal')
         self.stop_btn.config(state='normal' if busy else 'disabled')
@@ -368,6 +374,9 @@ class App:
         self.root.after(650, self.poll_events)
 
     def on_close(self):
+        if self.studio.is_busy():
+            messagebox.showinfo('Studio is exporting', 'Finish the current local export before closing to preserve its output.')
+            return
         if self.recorder.active or (self.pipeline and self.pipeline.active):
             if not messagebox.askyesno('Stop and finish?', 'Stop capture and finish smart processing before closing?'):
                 return
