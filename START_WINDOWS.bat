@@ -26,7 +26,7 @@ if not exist ".venv\Scripts\python.exe" (
 if errorlevel 1 goto missing_python
 call :note 02 "Python environment" ok
 
-".venv\Scripts\python.exe" -c "import liveclip,numpy,cv2,streamlink,rich; assert liveclip.__version__=='2.4.0'" >nul 2>nul
+".venv\Scripts\python.exe" -c "import liveclip,numpy,cv2,streamlink,rich; assert liveclip.__version__=='2.5.0'" >nul 2>nul
 if errorlevel 1 (
     call :note 03 "Local dependencies" working
     ".venv\Scripts\python.exe" -m pip install --quiet --progress-bar off --disable-pip-version-check -e ".[neon]"
