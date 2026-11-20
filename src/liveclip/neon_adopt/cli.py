@@ -296,6 +296,15 @@ def _argparser() -> argparse.ArgumentParser:
     chat.add_argument("--history", required=True, help="Comma-separated previous bucket counts")
     chat.add_argument("--current", type=int, required=True)
     chat.add_argument("--recent-30", type=int)
+
+    chat_distinct = sub.add_parser("chat-reactions", help="Rank source-relative chat windows with spam-resistant per-user reactions")
+    chat_distinct.add_argument("messages_json", type=Path)
+    chat_distinct.add_argument("--window", type=int, default=30)
+    chat_distinct.add_argument("--step", type=int, default=10)
+
+    live_search = sub.add_parser("discover-live", help="Read-only YouTube live search; never confirms rights/gameplay")
+    live_search.add_argument("query")
+    live_search.add_argument("--max", type=int, default=25)
     return parser
 
 
@@ -444,6 +453,24 @@ def main(argv=None) -> int:
                     raise ValueError("Each candidate needs start, end and rank")
             result = curation.select(clips, args.count, args.profile)
             _atomic_json(args.output, result)
+        elif args.command == "chat-reactions":
+            from liveclip.gta_adopt.chat_reactions import score_chat_windows
+            messages = _read_json(args.messages_json)
+            if not isinstance(messages, list) or len(messages) > 4000:
+                raise ValueError("Expected no more than 4000 timestamped chat messages")
+            if not 5 <= args.window <= 120 or not 5 <= args.step <= args.window:
+                raise ValueError("Choose a 5–120 second window and step up to that window")
+            latest = max((float(m.get("t", 0)) for m in messages if isinstance(m, dict)), default=0)
+            if not math.isfinite(latest) or latest > 14400 or latest < 0:
+                raise ValueError("Chat session must fit in a four-hour source timeline")
+            starts = [float(t) for t in range(0, max(1, int(latest) + 1), args.step)][:120]
+            result = {"windows": score_chat_windows(messages, starts, args.window),
+                      "privacy": "Aggregated chat scores only; usernames and messages are not exported"}
+        elif args.command == "discover-live":
+            from liveclip.gta_adopt.discovery import find_live
+            key = os.environ.get("YOUTUBE_API_KEY", "")
+            result = {"candidates": find_live(args.query, key, args.max),
+                      "warning": "Search results are NOT permission or gameplay verification"}
         elif args.command == "chat-score":
             history = [int(item.strip()) for item in args.history.split(",") if item.strip()]
             if len(history) > 30:
