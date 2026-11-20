@@ -17,6 +17,7 @@ import time
 from .capture import CaptureConfig, Recorder
 from .pipeline import HighlightPipeline, SmartConfig
 from .signals import PROFILES
+from .terminal_ui import SessionUI
 
 
 def build_parser():
@@ -75,22 +76,24 @@ def main(argv=None) -> int:
     assert folder is not None
     worker = HighlightPipeline(folder, smart, lambda kind, message: events.put((kind, message)))
     worker.start(already_finished=args.action == 'analyze')
-    print('Session:', folder, flush=True)
+    presentation = SessionUI(args.action, folder)
+    presentation.start()
     stopped = False
     try:
         while recorder.active or worker.active:
             try:
                 event, value = events.get(timeout=.5)
             except queue.Empty:
+                presentation.refresh()
                 continue
             if event in ('error','status','smart_status','candidate','highlight','log'):
-                print(f'[{event}] {value}', flush=True)
+                presentation.event(event, value)
             elif event == 'finished':
                 worker.finish_capture()
             elif event == 'smart_finished':
-                print('Highlight analyzer completed.', flush=True)
+                presentation.event('smart_status', 'Highlight analyzer completed.')
     except KeyboardInterrupt:
-        print('\nStopping. Closing source segments and draining highlight analysis…', flush=True)
+        presentation.event('status', 'Stopping and finalizing highlight analysis')
         stopped = True
         if recorder.active:
             recorder.stop()
@@ -103,6 +106,8 @@ def main(argv=None) -> int:
         worker.join(timeout=180)
         if worker.active:
             worker.cancel()
+    finally:
+        presentation.close(interrupted=stopped)
     return 130 if stopped else 0
 
 
