@@ -100,7 +100,7 @@ Transcription is explicitly opt-in and may download model weights. It processes 
 
 Optional transcript scoring may use a local Ollama text model if installed, with non-LLM fallback. This does not recognize visual gameplay events.
 
-Manual-review transcript prompts require a JSON ARRAY of word objects; the transcribe command outputs an object containing the array under the "words" field. Extract it before calling transcript-parts. Workflow auto-chaining remains pending.
+Manual-review transcript prompts accept either a JSON ARRAY of word objects or the complete transcript object produced by the transcribe command (the "words" field is read automatically).
 
     liveclip-neon transcript-parts words_array.json prompts.json --duration 5400 --title "Authorized stream"
 
