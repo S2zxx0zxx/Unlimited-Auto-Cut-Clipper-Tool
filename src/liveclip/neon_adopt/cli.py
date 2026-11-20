@@ -219,6 +219,16 @@ def _argparser() -> argparse.ArgumentParser:
     asr.add_argument("--language", choices=["en", "hi", "hinglish"])
     asr.add_argument("--model", default="small", help="Explicit faster-whisper model name or local path")
 
+    vod_url = sub.add_parser("vod-url", help="Authorized public VOD URL -> local source -> candidate shorts")
+    vod_url.add_argument("url")
+    vod_url.add_argument("folder", type=Path)
+    vod_url.add_argument("--i-have-rights", action="store_true", help="Confirm ownership or recording permission")
+    vod_url.add_argument("--count", type=int, default=3)
+    vod_url.add_argument("--seconds", type=int, default=30)
+    vod_url.add_argument("--profile", choices=list(curation.PROFILES), default="balanced")
+    vod_url.add_argument("--max-gib", type=float, default=5.0)
+    vod_url.add_argument("--no-motion", action="store_true")
+
     captions = sub.add_parser("captions-convert", help="Validate SRT/VTT and rewrite as SRT/VTT")
     captions.add_argument("source", type=Path)
     captions.add_argument("output", type=Path)
@@ -248,6 +258,16 @@ def _argparser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = _argparser().parse_args(argv)
     try:
+        if args.command == "vod-url":
+            from .source_download import download_public_vod
+            folder = args.folder.expanduser().resolve()
+            media = download_public_vod(args.url, folder / "sources",
+                                        authorized=args.i_have_rights, max_gib=args.max_gib)
+            child = ["vod", media["path"], str(folder / "highlights"), "--count", str(args.count),
+                     "--seconds", str(args.seconds), "--profile", args.profile]
+            if args.no_motion:
+                child.append("--no-motion")
+            return main(child)
         if args.command == "vertical":
             result = verticalize(args.source, args.output, start=args.start, duration=args.duration,
                                  layout=args.layout, aspect=args.aspect, resolution=args.resolution,
@@ -382,7 +402,7 @@ def main(argv=None) -> int:
             raise ValueError("Unsupported action")
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
-    except (ValueError, RuntimeError, OSError, ImportError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+    except (ValueError, RuntimeError, OSError, PermissionError, ImportError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
         print(f"LiveClip Neon: {exc}", file=sys.stderr)
         return 2
 
