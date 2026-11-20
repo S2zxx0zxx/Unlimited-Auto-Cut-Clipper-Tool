@@ -10,7 +10,7 @@ import html
 import json
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 SEARCH_URL="https://www.googleapis.com/youtube/v3/search"
 
@@ -31,6 +31,9 @@ def find_live(query: str, key: str, limit: int = 25) -> list[dict]:
     except HTTPError as exc:
         # Never echo the credential-bearing URL or upstream body
         raise RuntimeError(f"YouTube Data API returned HTTP {exc.code}; verify quota and key") from None
+    except (URLError, TimeoutError, OSError):
+        # Network exceptions may contain query-string credentials, so redact details.
+        raise RuntimeError("YouTube live discovery is unavailable; check network and API access") from None
     if not isinstance(data,dict):
         raise ValueError("Unexpected YouTube response")
     result=[]
