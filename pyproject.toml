@@ -25,6 +25,8 @@ liveclip-neon = "liveclip.neon_adopt.cli:main"
 [project.optional-dependencies]
 test = ["pytest>=8,<10"]
 neon = ["numpy>=1.26,<3", "opencv-python-headless>=4.8,<5"]
+speech = ["faster-whisper>=1.2,<2"]
+all = ["numpy>=1.26,<3", "opencv-python-headless>=4.8,<5", "faster-whisper>=1.2,<2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
