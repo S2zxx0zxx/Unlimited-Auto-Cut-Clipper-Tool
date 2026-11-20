@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "liveclip-zero-smart"
-version = "2.2.0"
+version = "2.3.0"
 description = "Local livestream recorder and heuristic highlight candidate detector"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,6 +27,7 @@ test = ["pytest>=8,<10"]
 neon = ["numpy>=1.26,<3", "opencv-python-headless>=4.8,<5"]
 speech = ["faster-whisper>=1.2,<2"]
 download = ["yt-dlp>=2025.1"]
+gta = ["numpy>=1.26,<3", "opencv-python-headless>=4.8,<5", "onnxruntime>=1.18,<2"]
 all = ["numpy>=1.26,<3", "opencv-python-headless>=4.8,<5", "faster-whisper>=1.2,<2", "yt-dlp>=2025.1"]
 
 [tool.setuptools.packages.find]
