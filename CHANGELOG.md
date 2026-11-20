@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.0 — 2026-11-20
+- Add private loopback browser Studio with live Start/Stop, local VOD, preview, and one-click terminal-free Windows launcher.
+- Support 15–300s maximum highlight windows in live and local workflows without making 300 seconds of arbitrary filler.
+- Add opt-in conservative activity-event proposal and independent audio/video confirmation to suppress random-looking cuts; preserve existing algorithms and author notices.
+- Add explicit limitations for game-specific race recognition, timeline proof, replay acceptance, and provider/OS tests.
+- Add synthetic 300-second FFmpeg multi-segment render, localhost-security and false-positive regression tests.
+
+
 ## 2.4.0 — 2026-11-20
 - Make LiveClip Zero Studio the primary first-party desktop product identity; preserve repository source/license attribution.
 - Add a Local Shorts Studio tab, existing-video highlight export, and fully local synthetic demo generation.
