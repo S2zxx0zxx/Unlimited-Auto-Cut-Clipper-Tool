@@ -19,6 +19,16 @@
 | No output after Ctrl+C | Recording finalization and rendering can require extra processing; inspect session folder and errors; avoid repeated forced termination |
 | Disk space low | Change output folder to a drive with sufficient space; raw source segments accumulate by design and are not auto-deleted |
 
+## Start/Stop controls missing on smaller laptop screens
+
+The Start and Stop buttons belong on the **Live + Smart** tab immediately below
+the output folder. If you are on an older download where the buttons fall below
+the large Notebook, update `src/liveclip/gui.py` from the current verified
+repository release. Do **not** reinstall Python, FFmpeg or the local .venv for
+this presentation-only issue. Never start capture merely by pasting the URL:
+click **START LIVE + SMART** when the source is live and you are authorized
+to record it. Click **STOP + FINISH** to finalize.
+
 ## Diagnosis (Windows)
 
 Double-click \`CHECK_SETUP_WINDOWS.bat\`, or run the following in the extracted project folder:
