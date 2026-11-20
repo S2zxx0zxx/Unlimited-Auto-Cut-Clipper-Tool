@@ -116,8 +116,10 @@ class WebLocalSecurity(unittest.TestCase):
             conn = HTTPConnection(HOST,server.server_port,timeout=10)
             conn.request("GET","/",headers={"Host":host})
             resp = conn.getresponse()
+            cookie = resp.getheader("Set-Cookie").split(";")[0]
             page = resp.read().decode()
             self.assertEqual(resp.status,200)
+            self.assertTrue(cookie.startswith("LCSESSION="))
             self.assertIn("PRIVATE",page.upper())
             self.assertIn("▶ START LIVE + SMART",page)
             self.assertIn(server.token,page)
@@ -142,6 +144,22 @@ class WebLocalSecurity(unittest.TestCase):
             self.assertEqual(resp.status,400)
             self.assertTrue(any(term in text["error"].lower()
                                 for term in ("permission", "rights", "own", "record")))
+            with tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                clip = root / "highlight_01.mp4"
+                clip.write_bytes(b"0123456789" * 100)
+                server.state.latest_output = root
+                conn.request("GET","/media?kind=vod&name=highlight_01.mp4",
+                             headers={"Host":host})
+                resp=conn.getresponse();resp.read()
+                self.assertEqual(resp.status,403)
+                conn.request("GET","/media?kind=vod&name=highlight_01.mp4",
+                             headers={"Host":host,"Cookie":cookie,"Range":"bytes=10-19"})
+                resp=conn.getresponse()
+                data=resp.read()
+                self.assertEqual(resp.status,206)
+                self.assertEqual(data,b"0123456789")
+                self.assertEqual(resp.getheader("Content-Range"),"bytes 10-19/1000")
             conn.request("GET","/",headers={"Host":"foreign-domain.example"})
             resp=conn.getresponse();resp.read()
             self.assertEqual(resp.status,403)
