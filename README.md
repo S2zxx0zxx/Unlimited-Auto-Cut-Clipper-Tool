@@ -1,6 +1,6 @@
 # Unlimited Auto Cut Clipper Tool
 
-**LiveClip Zero Smart — v2.1.0** · Open-source · Local-first · No paid AI/cloud API
+**LiveClip Zero Smart — v2.2.0** · Open-source · Local-first · No paid AI/cloud API
 
 Record a **supported, authorized public livestream** into continuous source segments and automatically rank **candidate highlights** using reproducible audio/video heuristics. Review, keep or reject the generated MP4s. A local Tkinter GUI and headless CLI are included.
 
