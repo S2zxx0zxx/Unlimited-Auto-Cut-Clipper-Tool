@@ -10,6 +10,7 @@ import unittest
 from liveclip.neon_adopt import aiparts, curation, layouts, subtitles, translit
 from liveclip.neon_adopt.chat_hype import is_spike, analyze_bucket, hype_percent
 from liveclip.neon_adopt.cli import verticalize, main
+from liveclip.neon_adopt.source_download import validate_vod_url, download_public_vod
 
 
 class NeonBackendLogic(unittest.TestCase):
@@ -25,6 +26,21 @@ class NeonBackendLogic(unittest.TestCase):
                 self.assertGreaterEqual(layer["y"], 0)
                 self.assertLessEqual(layer["x"] + layer["w"], 720)
                 self.assertLessEqual(layer["y"] + layer["h"], 1280)
+
+    def test_vod_url_allowlist_and_rights_gate(self):
+        good = "https://www.youtube.com/watch?v=abcdefghijk"
+        self.assertEqual(validate_vod_url(good), good)
+        for bad in ("http://youtube.com/watch?v=abcdefghijk",
+                    "https://youtube.com.evil.example/watch",
+                    "https://127.0.0.1/video",
+                    "https://user:pass@youtube.com/watch?v=abcdefghijk",
+                    "https://kick.com:8080/private"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                validate_vod_url(bad)
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(PermissionError):
+                download_public_vod(good, Path(tmp), authorized=False)
+            self.assertEqual(main(["vod-url", good, str(Path(tmp)), "--count", "2"]), 2)
 
     def test_subtitle_round_trip(self):
         srt = "1\n00:00:01,000 --> 00:00:02,200\nHello दुनिया\n"
