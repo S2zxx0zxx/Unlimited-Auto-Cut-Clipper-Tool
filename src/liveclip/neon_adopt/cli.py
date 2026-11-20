@@ -213,8 +213,8 @@ def _atomic_json(path: Path, payload) -> None:
 
 
 def _argparser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="liveclip-neon",
-                                     description="Optional MIT-derived backend workflows for LiveClip Zero Smart")
+    parser = argparse.ArgumentParser(prog="liveclip-studio",
+                                     description="LiveClip Zero Studio: local video, subtitles, highlights and short-form exports")
     sub = parser.add_subparsers(dest="command", required=True)
     vertical = sub.add_parser("vertical", help="Render one 9:16/square/landscape clip without a web UI")
     vertical.add_argument("source", type=Path)
@@ -493,7 +493,7 @@ def main(argv=None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (ValueError, RuntimeError, OSError, PermissionError, ImportError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
-        print(f"LiveClip Neon: {exc}", file=sys.stderr)
+        print(f"LiveClip Studio: {exc}", file=sys.stderr)
         return 2
 
 
