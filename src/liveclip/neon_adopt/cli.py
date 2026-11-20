@@ -351,7 +351,8 @@ def main(argv=None) -> int:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(subtitles.write_track(cues, args.format, allow_overlap=True), encoding="utf-8")
         elif args.command == "transcript-parts":
-            words = _read_json(args.words_json)
+            words_data = _read_json(args.words_json)
+            words = words_data.get("words") if isinstance(words_data, dict) else words_data
             if not isinstance(words, list) or not 0 < len(words) <= 150_000:
                 raise ValueError("Expected a nonempty JSON array of timestamped words")
             if not math.isfinite(args.duration) or args.duration <= 0:
