@@ -298,31 +298,49 @@ def main(argv=None) -> int:
             _atomic_json(folder / "candidates.json", result)
         elif args.command == "transcribe":
             info = _media_info(args.source)
-            length = min(args.seconds if args.seconds is not None else 180, info["duration"] - args.start)
-            if not 0 <= args.start < info["duration"] or not 0 < length <= MAX_SINGLE_CLIP_SECONDS:
-                raise ValueError("Transcription selection must be within the video and at most 600s.")
+            length = min(args.seconds if args.seconds is not None else MAX_VOD_SECONDS,
+                         info["duration"] - args.start)
+            if not 0 <= args.start < info["duration"] or not 0 < length <= MAX_VOD_SECONDS:
+                raise ValueError("Transcription must be within source and at most four hours per request.")
             try:
                 from .captions import transcribe
-                base = args.output_base.expanduser().resolve()
-                base.parent.mkdir(parents=True, exist_ok=True)
-                cache = base.parent / ".asr_cache"
-                cache.mkdir(exist_ok=True)
-                word_data = transcribe(args.source.expanduser().resolve(), args.start,
-                                       args.start + length, cache,
-                                       language=args.language, model=args.model)
             except ImportError as exc:
-                raise RuntimeError("Install optional local transcription dependencies: pip install -e '.[speech]'") from exc
-            words = word_data.get("words") or []
+                raise RuntimeError("Install local transcription dependencies: pip install -e '.[speech]'") from exc
+            base = args.output_base.expanduser().resolve()
+            base.parent.mkdir(parents=True, exist_ok=True)
+            cache = base.parent / ".asr_cache"
+            cache.mkdir(exist_ok=True)
+            words = []
+            language = args.language
+            # Bounded ASR windows: process at most five minutes of audio at a time.
+            # Upstream ASR emits timestamps RELATIVE to the selected window.
+            end = args.start + length
+            at = args.start
+            while at < end - .001:
+                stop = min(end, at + 300.0)
+                response = transcribe(args.source.expanduser().resolve(), at, stop, cache,
+                                      language=args.language, model=args.model)
+                for item in response.get("words") or []:
+                    start = float(item["start"]) + at
+                    finish = min(end, float(item["end"]) + at)
+                    if start < finish:
+                        words.append({"start": round(start, 3), "end": round(finish, 3),
+                                      "text": str(item["text"])})
+                language = response.get("language", language)
+                at = stop
             if not words:
-                raise ValueError("No words detected; check source/language or use a subtitle import.")
+                raise ValueError("No words detected; check the audio or import an existing subtitle track.")
+            words.sort(key=lambda w: w["start"])
             out_json = base.with_suffix(".words.json")
             out_srt = base.with_suffix(".srt")
-            _atomic_json(out_json, word_data)
-            items = [{"start": max(0, float(w["start"])),
-                      "end": float(w["end"]), "text": str(w["text"])} for w in words]
-            out_srt.write_text(subtitles.write_track(items, "srt", duration=length + .1,
+            _atomic_json(out_json, {"words": words, "language": language, "duration": info["duration"],
+                                    "range_start": args.start, "range_end": end,
+                                    "source": str(args.source.expanduser().resolve())})
+            items = [{"start": float(w["start"]), "end": float(w["end"]), "text": str(w["text"])}
+                     for w in words]
+            out_srt.write_text(subtitles.write_track(items, "srt", duration=end + .1,
                                                        allow_overlap=True), encoding="utf-8")
-            result = {"words": len(words), "language": word_data.get("language"),
+            result = {"words": len(words), "language": language,
                       "transcript_json": str(out_json), "subtitles": str(out_srt)}
         elif args.command == "captions-convert":
             source = args.source.read_text(encoding="utf-8-sig")
