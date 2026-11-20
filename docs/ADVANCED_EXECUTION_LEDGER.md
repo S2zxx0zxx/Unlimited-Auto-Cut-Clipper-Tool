@@ -48,7 +48,7 @@
 | LC-03.09 | Expand to second game only after first game measured release gate | TODO | — |
 | **LC-04** | **Vertical editing/reframing** | **PLANNED** | See master plan |
 | LC-04.01 | Add timeline recipe contract for 9:16, 16:9, 1:1 and safe areas | TODO | — |
-| LC-04.02 | Implement deterministic center crop, blur/pad and game HUD-preserving fallback | TODO | — |
+| LC-04.02 | Implement deterministic center crop, blur/pad and game HUD-preserving fallback | IN_PROGRESS | PR #3: subset implemented; full requirement and real acceptance still open |
 | LC-04.03 | Evaluate tracker/model license and choose compliant face/object detector | TODO | — |
 | LC-04.04 | Compute subject saliency and identity tracking with confidence boundaries | TODO | — |
 | LC-04.05 | Apply temporally smoothed virtual-camera path and shot-change reset | TODO | — |
@@ -58,7 +58,7 @@
 | LC-04.09 | Measure subject retention, HUD readability, crop jitter and video/audio sync | TODO | — |
 | **LC-05** | **ASR/subtitles/translation** | **PLANNED** | See master plan |
 | LC-05.01 | Define transcript segments/words and language fields in SQLite schema | TODO | — |
-| LC-05.02 | Add CPU-first faster-whisper adapter with selectable model size | TODO | — |
+| LC-05.02 | Add CPU-first faster-whisper adapter with selectable model size | IN_PROGRESS | PR #3: subset implemented; full requirement and real acceptance still open |
 | LC-05.03 | Integrate VAD, silence suppression and confidence warnings | TODO | — |
 | LC-05.04 | Produce editable transcript and word-aligned SRT and WebVTT exports | TODO | — |
 | LC-05.05 | Add subtitle styles with 9:16 safe-area checks and font licensing | TODO | — |
@@ -71,7 +71,7 @@
 | LC-06.02 | Create multi-signal ranker incorporating semantic and game evidence | TODO | — |
 | LC-06.03 | Add dynamic event context window and pre/post-roll per event class | TODO | — |
 | LC-06.04 | Build cross-segment overlap graph and perceptual/audio deduplication | TODO | — |
-| LC-06.05 | Build top-K diversity and per-session quality controls | TODO | — |
+| LC-06.05 | Build top-K diversity and per-session quality controls | IN_PROGRESS | PR #3: subset implemented; full requirement and real acceptance still open |
 | LC-06.06 | Add evidence explanations and do not call raw score a probability | TODO | — |
 | LC-06.07 | Capture Keep/Reject/trim feedback without silent automatic retraining | TODO | — |
 | LC-06.08 | Measure precision@K, false positives, missed events and duplicate rate | TODO | — |
@@ -186,3 +186,9 @@ Status transition + timestamp:
 - Missing verified evidence: real YouTube/Twitch capture, Windows/macOS GUI, 24h soak, human-labelled precision/recall, installer distribution, official API publishing.
 
 **Source of truth:** [Master Plan](ADVANCED_CAPABILITIES_MASTER_PLAN.md) + this ledger + [Research Decisions](ADVANCED_RESEARCH_DECISIONS.md). Do not depend on any claimed assistant memory write.
+
+## NeonClipping adoption checkpoint — 2026-11-20
+
+- PR #3 introduces opt-in MIT-attributed backend algorithms and new CLI, without replacing live recorder or GUI.
+- LC-04.02 / LC-05.02 / LC-06.05 are IN_PROGRESS because their current implementations cover only part of each full acceptance requirement; do not mark VERIFIED.
+- Other LC tasks remain TODO until code, real-device/provider evidence and criteria are proven. See docs/NEONCLIPPING_ADOPTION.md for the exact feature parity table and first-party limitations.
