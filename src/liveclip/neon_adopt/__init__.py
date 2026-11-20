@@ -1,0 +1,1 @@
+"""Optional NeonClipping-derived backend algorithms (no automatic source deletion).\n\nSee THIRD_PARTY_LICENSES/NeonClipping-MIT.txt and docs/NEONCLIPPING_ADOPTION.md.\n"""\n
