@@ -78,6 +78,16 @@ class NeonBackendLogic(unittest.TestCase):
             self.assertEqual(main(["curate-json", str(inp), str(out)]), 0)
             self.assertEqual(len(json.loads(out.read_text())), 1)
 
+    def test_transcript_parts_cli_accepts_asr_object(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "transcript.words.json"
+            dest = Path(tmp) / "parts.json"
+            source.write_text(json.dumps({"words": [{"start": .5, "end": .8, "text": "Hello"},
+                                                    {"start": 20.5, "end": 20.8, "text": "world."}]}), encoding="utf-8")
+            self.assertEqual(main(["transcript-parts", str(source), str(dest),
+                                   "--duration", "60", "--parts", "1"]), 0)
+            self.assertEqual(len(json.loads(dest.read_text())["parts"]), 1)
+
 
 @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg/ffprobe required")
 class NeonBackendMedia(unittest.TestCase):
