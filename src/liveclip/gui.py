@@ -57,6 +57,7 @@ class App:
         self.highlight_duration = tk.StringVar(value=str(saved.get('highlight_duration', 30)))
         self.cooldown = tk.StringVar(value=str(saved.get('cooldown', 25)))
         self.ocr = tk.BooleanVar(value=bool(saved.get('ocr', False)))
+        self.precision = tk.BooleanVar(value=bool(saved.get('precision', True)))
         self.status = tk.StringVar(value='Ready — authorized stream URL or existing clip folder')
         self.smart_status = tk.StringVar(value='Smart detector idle')
         self.counter = tk.StringVar(value='Segments: 0   •   Highlights: 0')
@@ -158,13 +159,15 @@ class App:
         settings = (
             ('Profile', self.profile, list(PROFILES)),
             ('Sensitivity', self.sensitivity, ['More picks (12)', 'Balanced (22)', 'Strict (35)']),
-            ('Highlight length', self.highlight_duration, ['15', '30', '45', '60']),
+            ('Highlight max length', self.highlight_duration, ['15', '30', '45', '60', '90', '120', '180', '300']),
             ('Duplicate cooldown (s)', self.cooldown, ['10', '15', '25', '30', '45', '60']),
         )
         for i, (title, var, choices) in enumerate(settings):
             ttk.Label(options, text=title).grid(row=0, column=i, sticky='w', padx=(0, 12))
             ttk.Combobox(options, textvariable=var, state='readonly', values=choices, width=16).grid(
                 row=1, column=i, sticky='w', padx=(0, 12), pady=(5, 9))
+        ttk.Checkbutton(detection, text='Precision moments: require corroborated activity; skip random weak picks',
+                        variable=self.precision).pack(anchor='w')
         ttk.Checkbutton(detection, text='Optional on-screen text detection (requires local Tesseract OCR installation)',
                         variable=self.ocr).pack(anchor='w')
         ttk.Label(detection, text='Scores indicate promising activity, not proven viral / funny / winning moments.',
@@ -188,13 +191,15 @@ class App:
         threshold = float(self.sensitivity.get().split('(')[-1].strip(')'))
         return SmartConfig(profile=self.profile.get(), threshold=threshold,
                            highlight_seconds=int(self.highlight_duration.get()),
-                           cooldown_seconds=int(self.cooldown.get()), ocr=self.ocr.get())
+                           cooldown_seconds=int(self.cooldown.get()), ocr=self.ocr.get(),
+                           precision=self.precision.get())
 
     def _save_settings(self):
         data = {'seconds': int(self.duration.get()), 'quality': self.quality.get(),
                 'output': self.output.get(), 'profile': self.profile.get(),
                 'sensitivity': self.sensitivity.get(), 'highlight_duration': int(self.highlight_duration.get()),
-                'cooldown': int(self.cooldown.get()), 'ocr': self.ocr.get()}
+                'cooldown': int(self.cooldown.get()), 'ocr': self.ocr.get(),
+                'precision': self.precision.get()}
         try:
             SETTINGS.write_text(json.dumps(data, indent=2), encoding='utf-8')
         except OSError:
