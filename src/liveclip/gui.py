@@ -98,6 +98,7 @@ class App:
             lambda: not self.recorder.active and not bool(self.pipeline and self.pipeline.active),
             self.note,
         )
+        tabs.select(self.studio.frame)
         ttk.Label(live_tab, text='Livestream URL (Streamlink-supported, authorized sources)').pack(anchor='w')
         ttk.Entry(live_tab, textvariable=self.url).pack(fill='x', pady=(6, 12))
         live_opts = ttk.Frame(live_tab)
