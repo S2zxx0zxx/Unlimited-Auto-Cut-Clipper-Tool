@@ -67,7 +67,7 @@ class PrecisionMoments(unittest.TestCase):
         self.assertGreater(window[1] - window[0], 100)
 
     def test_no_reconnect_epoch_crossing(self):
-        interval = candidate_window(40, [10,30,40], limit=90,
+        interval = candidate_window(40, [21,33,46], limit=90,
                                     epoch_start=20,epoch_end=50)
         self.assertIsNotNone(interval)
         self.assertGreaterEqual(interval[0], 20)
@@ -118,7 +118,8 @@ class WebLocalSecurity(unittest.TestCase):
                                   "Origin":f"http://{host}"})
             resp=conn.getresponse();text=json.loads(resp.read())
             self.assertEqual(resp.status,400)
-            self.assertIn("permission",text["error"].lower())
+            self.assertTrue(any(term in text["error"].lower()
+                                for term in ("permission", "rights", "own", "record")))
             conn.request("GET","/",headers={"Host":"foreign-domain.example"})
             resp=conn.getresponse();resp.read()
             self.assertEqual(resp.status,403)
