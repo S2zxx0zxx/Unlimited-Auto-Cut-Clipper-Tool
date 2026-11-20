@@ -6,6 +6,7 @@ optional at that point; the fallback never emits ANSI codes or obscures errors.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 import shutil
 import sys
@@ -76,7 +77,7 @@ def _elapsed(seconds: float) -> str:
 
 def _clip_message(message: object, max_length: int = 80) -> str:
     """Never render control characters from plugin-provided source messages."""
-    clean = " ".join(str(message).split())
+    clean = " ".join(re.sub(r"[\x00-\x1f\x7f-\x9f]", " ", str(message)).split())
     return clean if len(clean) <= max_length else clean[:max_length-1] + "…"
 
 
@@ -137,7 +138,8 @@ class SessionUI:
             print(f"[{kind}] {message}", file=self.stream, flush=True)
         elif kind == "error" or os.environ.get("LIVECLIP_VERBOSE") == "1":
             # Detailed failures remain permanently visible when Live exits.
-            self._live.console.print(f"[{kind}] {message}")
+            self._live.console.print(Text(f"[{kind}] {message}",
+                style="red" if kind == "error" else MUTED))
         self.refresh(force=True)
 
     def close(self, *, interrupted: bool = False) -> None:
