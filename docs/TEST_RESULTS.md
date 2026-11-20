@@ -33,3 +33,16 @@ Verification observed:
 - `python -m liveclip doctor` — **reports FFmpeg, ffprobe and Python present; Streamlink CLI missing in this test environment**, so this command intentionally returns nonzero. OCR executable present. Installing normal dependencies will supply Streamlink.
 
 **Not verified:** Real YouTube/Twitch capture, Windows/macOS GUI, OS packaging/installers, sustained 24-hour load, production security assessment, GitHub Actions CI. Do not infer those from synthetic tests.
+
+## v2.4.0 — guided desktop onboarding and local demo — 2026-11-20
+
+- GitHub Actions PR verification: [run 44694485506](https://github.com/S2zxx0zxx/Unlimited-Auto-Cut-Clipper-Tool/actions/runs/44694485506) on branch head \`e020078e49bfe7444634cfaf74b782c5482ccff7\` — **successful**.
+- 47 tests executed: **46 passed, 1 skipped, 0 failed**. The skip is optional Tesseract OCR because that CI image lacks its executable.
+- Added tests: desktop Studio job argument validation; path and input guards; first-run launcher/license artifact checks; **actual FFmpeg synthetic demo creation → VOD ranking → playable 720×1280 portrait highlight → candidate manifest → unchanged original source**.
+- Static compilation and project installation passed on Linux GitHub Actions.
+- The installer scripts, Windows Tkinter GUI interaction and network provider behavior were **not** tested on their intended real devices/services by this CI run.
+- Startup flow now avoids re-installing unchanged dependencies when the local install/import check passes; Linux CI does not validate the Windows batch interpreter.
+- Linux GUI requires a graphical environment (headless CI does not click Tkinter widgets); user acceptance on Windows/macOS and real authorized streams remains pending.
+- Existing core v2.3 capture/reconnect, media scoring, captions, layout rendering and source retention regression tests remain part of the suite.
+
+**Gate statement:** this is an installable **source-code desktop app**, not a signed Windows .exe, Android app, tested all-platform packaged binary, trained gaming understanding model or platform-certified uploader.
